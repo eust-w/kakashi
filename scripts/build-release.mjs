@@ -43,6 +43,7 @@ for (const target of targets) {
   await writeFile(join(packageDir, "TARGET"), `${target}\n`, "utf8");
   await writeFile(join(packageDir, "INSTALL.md"), installGuide(version, target), "utf8");
   await cp(join(rootDir, "README.md"), join(packageDir, "README.md"));
+  await cp(join(rootDir, "README-en.md"), join(packageDir, "README-en.md"));
   await cp(join(rootDir, "LICENSE"), join(packageDir, "LICENSE"));
 
   const webDist = join(rootDir, "apps", "web", "dist");
@@ -97,6 +98,11 @@ node "%SCRIPT_DIR%kakashi.mjs" %*\r
 
 function installGuide(currentVersion, target) {
   return `# Kakashi ${currentVersion} (${target})
+
+语言文档：
+
+- 中文默认文档：README.md
+- English documentation: README-en.md
 
 ## 环境要求 / Requirements
 
