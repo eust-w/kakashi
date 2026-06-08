@@ -3,6 +3,7 @@ import cors from "cors";
 import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { KakashiOrchestrator, type KakashiRunState, type RunEvent } from "@kakashi/core";
 
@@ -10,6 +11,19 @@ export interface ServerOptions {
   port: number;
   workDir: string;
   webDir?: string;
+  webAssets?: EmbeddedWebAssets;
+}
+
+export interface EmbeddedWebAsset {
+  contentType: string;
+  contentBase64: string;
+}
+
+export type EmbeddedWebAssets = Record<string, EmbeddedWebAsset>;
+
+interface WebAssetSource {
+  webDir?: string;
+  webAssets?: EmbeddedWebAssets;
 }
 
 const CreateRunSchema = z.object({
@@ -35,7 +49,8 @@ const running = new Map<string, KakashiOrchestrator>();
 const events = new EventEmitter();
 events.setMaxListeners(1_000);
 
-export function createApp(workDir = process.cwd(), webDir?: string): express.Express {
+export function createApp(workDir = process.cwd(), web?: string | WebAssetSource): express.Express {
+  const webSource: WebAssetSource = typeof web === "string" ? { webDir: web } : web ?? {};
   const app = express();
   app.use(cors());
   app.use(express.json({ limit: "1mb" }));
@@ -149,11 +164,21 @@ export function createApp(workDir = process.cwd(), webDir?: string): express.Exp
     }
   });
 
-  const indexPath = webDir ? join(webDir, "index.html") : null;
-  if (webDir && indexPath && existsSync(indexPath)) {
-    app.use(express.static(webDir));
+  const indexPath = webSource.webDir ? join(webSource.webDir, "index.html") : null;
+  if (webSource.webDir && indexPath && existsSync(indexPath)) {
+    app.use(express.static(webSource.webDir));
     app.get(/^\/(?!api\/|health$).*/, (_req, res) => {
       res.sendFile(indexPath);
+    });
+  } else if (webSource.webAssets && Object.keys(webSource.webAssets).length > 0) {
+    app.get(/^\/(?!api\/|health$).*/, (req, res) => {
+      const key = normalizeAssetPath(req.path);
+      const asset = webSource.webAssets?.[key] ?? webSource.webAssets?.["index.html"];
+      if (!asset) {
+        res.status(404).json({ error: "Web asset not found." });
+        return;
+      }
+      res.type(asset.contentType).send(Buffer.from(asset.contentBase64, "base64"));
     });
   }
 
@@ -166,13 +191,15 @@ export function createApp(workDir = process.cwd(), webDir?: string): express.Exp
 }
 
 export async function startServer(options: ServerOptions): Promise<void> {
-  const app = createApp(options.workDir, options.webDir);
+  const app = createApp(options.workDir, { webDir: options.webDir, webAssets: options.webAssets });
   await new Promise<void>((resolveListen) => {
     app.listen(options.port, "127.0.0.1", () => resolveListen());
   });
   console.log(`Kakashi server listening on http://127.0.0.1:${options.port}`);
   if (options.webDir) {
     console.log(`Kakashi web UI served from ${options.webDir}`);
+  } else if (options.webAssets && Object.keys(options.webAssets).length > 0) {
+    console.log("Kakashi web UI served from embedded assets");
   }
 }
 
@@ -203,10 +230,33 @@ function sendSse(res: express.Response, event: RunEvent): void {
   res.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isDirectExecution()) {
+  void startFromCli().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}
+
+async function startFromCli(): Promise<void> {
   const portArg = process.argv.find((arg) => arg.startsWith("--port="));
   const webDirArg = process.argv.find((arg) => arg.startsWith("--web-dir="));
   const port = portArg ? Number(portArg.split("=")[1]) : Number(process.env.PORT ?? 4317);
   const webDir = webDirArg ? resolve(process.cwd(), webDirArg.split("=")[1] ?? "") : process.env.KAKASHI_WEB_DIST;
   await startServer({ port, workDir: process.cwd(), webDir });
+}
+
+function isDirectExecution(): boolean {
+  return Boolean(process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href);
+}
+
+function normalizeAssetPath(path: string): string {
+  let decoded = path;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    decoded = path;
+  }
+  const clean = decoded.replace(/^\/+/, "");
+  if (!clean || clean.endsWith("/")) return "index.html";
+  return clean.replace(/\.\.(\/|\\)/g, "");
 }

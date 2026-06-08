@@ -1,6 +1,6 @@
 {
   "name": "kakashi",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.33.0",
@@ -17,6 +17,7 @@
     "test:codex": "RUN_CODEX_INTEGRATION=1 vitest run -c vitest.integration.config.ts tests/integration/codex-real.test.ts",
     "test:e2e": "playwright test",
     "release:package": "node scripts/build-release.mjs",
+    "release:executable": "node scripts/build-executable.mjs",
     "kakashi": "node apps/cli/dist/index.js",
     "doctor": "node apps/cli/dist/index.js doctor"
   },
@@ -27,8 +28,9 @@
     "@vitest/coverage-v8": "^4.0.15",
     "esbuild": "^0.27.7",
     "eslint": "^9.39.1",
-    "tsx": "^4.20.6",
+    "postject": "1.0.0-alpha.6",
     "tsup": "^8.5.1",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.48.0",
     "vitest": "^4.0.15"

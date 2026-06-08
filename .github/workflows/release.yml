@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, for example v0.1.0"
+        description: "Release version, for example v0.2.0"
         required: true
         type: string
 
@@ -19,8 +19,8 @@ env:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+    runs-on: macos-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -48,10 +48,23 @@ jobs:
           pnpm typecheck
           pnpm test:coverage
 
-      - name: Build release packages
+      - name: Build release assets
         env:
           RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
-        run: pnpm release:package
+        run: |
+          pnpm release:package
+          pnpm release:executable -- \
+            --target=linux-x64 \
+            --target=linux-arm64 \
+            --target=darwin-x64 \
+            --target=darwin-arm64 \
+            --target=windows-x64 \
+            --target=windows-arm64
+          mkdir -p dist/upload
+          cp dist/release/*.tar.gz dist/upload/
+          cp dist/executables/kakashi-v* dist/upload/
+          cd dist/upload
+          shasum -a 256 * > SHA256SUMS.txt
 
       - name: Create release notes
         env:
@@ -60,7 +73,7 @@ jobs:
           cat > release-notes.md <<EOF
           # Kakashi ${RELEASE_VERSION}
 
-          This release includes prebuilt Kakashi CLI archives for:
+          This release includes single-file Kakashi CLI executables for:
 
           - linux-x64
           - linux-arm64
@@ -69,7 +82,9 @@ jobs:
           - windows-x64
           - windows-arm64
 
-          Each archive contains the standalone Node-based Kakashi CLI bundle and the built Web UI. Node.js 24+, Git, GitHub CLI authentication, and Codex CLI are still required at runtime.
+          The single-file executables embed the Kakashi Web UI and the Node.js runtime needed to start Kakashi. Git, GitHub CLI authentication, and Codex CLI are still required for real Kakashi runs.
+
+          Archive packages are also included for users who prefer an unpacked directory with README.md, INSTALL.md, wrapper scripts, and Web UI files. Archives require Node.js 24+ at runtime.
 
           See README.md in this repository, and INSTALL.md inside each archive, for CLI and Web UI usage.
           EOF
@@ -80,9 +95,9 @@ jobs:
           RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
         run: |
           if gh release view "$RELEASE_VERSION" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_VERSION" dist/release/*.tar.gz dist/release/SHA256SUMS.txt --clobber
+            gh release upload "$RELEASE_VERSION" dist/upload/* --clobber
           else
-            gh release create "$RELEASE_VERSION" dist/release/*.tar.gz dist/release/SHA256SUMS.txt \
+            gh release create "$RELEASE_VERSION" dist/upload/* \
               --title "Kakashi $RELEASE_VERSION" \
               --notes-file release-notes.md
           fi

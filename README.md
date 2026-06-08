@@ -18,30 +18,74 @@ Kakashi does not fork Codex CLI. It treats Codex CLI as the code execution engin
 
 ## Requirements
 
-- Node.js 24+
-- pnpm 10+
+For the single-file executable:
+
 - Git
 - GitHub CLI authenticated with `gh auth login`, or `GITHUB_TOKEN` / `GH_TOKEN`
 - Codex CLI available as `codex`
 
+The single-file executable bundles the Node.js runtime needed to start Kakashi. Generated projects may still need their own language runtimes and package managers during verification.
+
+For release archives or source development:
+
+- Node.js 24+
+- Git
+- GitHub CLI authenticated with `gh auth login`, or `GITHUB_TOKEN` / `GH_TOKEN`
+- Codex CLI available as `codex`
+- pnpm 10+ when developing from source
+
 ## Install From GitHub Release
 
-Download the archive for your system from the GitHub Releases page:
+Download the single-file executable for your system from the GitHub Releases page:
 
-- `kakashi-v0.1.0-linux-x64.tar.gz`
-- `kakashi-v0.1.0-linux-arm64.tar.gz`
-- `kakashi-v0.1.0-darwin-x64.tar.gz`
-- `kakashi-v0.1.0-darwin-arm64.tar.gz`
-- `kakashi-v0.1.0-windows-x64.tar.gz`
-- `kakashi-v0.1.0-windows-arm64.tar.gz`
+- `kakashi-v0.2.0-linux-x64`
+- `kakashi-v0.2.0-linux-arm64`
+- `kakashi-v0.2.0-darwin-x64`
+- `kakashi-v0.2.0-darwin-arm64`
+- `kakashi-v0.2.0-windows-x64.exe`
+- `kakashi-v0.2.0-windows-arm64.exe`
+
+Verify downloads with the release `SHA256SUMS.txt` file.
+
+Linux/macOS:
+
+```bash
+chmod +x kakashi-v0.2.0-darwin-arm64
+./kakashi-v0.2.0-darwin-arm64 doctor
+./kakashi-v0.2.0-darwin-arm64 run "Build a TypeScript CLI with tests" --out ./generated --max-repos 8 --max-iterations 2 --force
+```
+
+Windows PowerShell:
+
+```powershell
+.\kakashi-v0.2.0-windows-x64.exe doctor
+.\kakashi-v0.2.0-windows-x64.exe run "Build a TypeScript CLI with tests" --out .\generated --max-repos 8 --max-iterations 2 --force
+```
+
+The single-file executable embeds the Web UI. Start it with:
+
+```bash
+./kakashi-v0.2.0-darwin-arm64 serve --port 4317
+```
+
+Open `http://127.0.0.1:4317/`.
+
+Release also includes full archive packages for users who prefer a directory with `README.md`, `INSTALL.md`, `LICENSE`, wrapper scripts, and Web UI files:
+
+- `kakashi-v0.2.0-linux-x64.tar.gz`
+- `kakashi-v0.2.0-linux-arm64.tar.gz`
+- `kakashi-v0.2.0-darwin-x64.tar.gz`
+- `kakashi-v0.2.0-darwin-arm64.tar.gz`
+- `kakashi-v0.2.0-windows-x64.tar.gz`
+- `kakashi-v0.2.0-windows-arm64.tar.gz`
 
 Each archive contains a standalone Node-based Kakashi CLI bundle, the built Web UI, and an `INSTALL.md` file. Node.js 24+, Git, GitHub CLI authentication, and Codex CLI are still required at runtime.
 
 Linux/macOS:
 
 ```bash
-tar -xzf kakashi-v0.1.0-linux-x64.tar.gz
-cd kakashi-v0.1.0-linux-x64
+tar -xzf kakashi-v0.2.0-linux-x64.tar.gz
+cd kakashi-v0.2.0-linux-x64
 ./bin/kakashi doctor
 ./bin/kakashi run "Build a TypeScript CLI with tests" --out ./generated --max-repos 8 --max-iterations 2 --force
 ```
@@ -49,8 +93,8 @@ cd kakashi-v0.1.0-linux-x64
 Windows PowerShell:
 
 ```powershell
-tar -xzf kakashi-v0.1.0-windows-x64.tar.gz
-cd kakashi-v0.1.0-windows-x64
+tar -xzf kakashi-v0.2.0-windows-x64.tar.gz
+cd kakashi-v0.2.0-windows-x64
 .\bin\kakashi.cmd doctor
 .\bin\kakashi.cmd run "Build a TypeScript CLI with tests" --out .\generated --max-repos 8 --max-iterations 2 --force
 ```
@@ -125,13 +169,27 @@ Open `http://127.0.0.1:4317`.
 
 ## Release Build
 
-Create local release archives:
+Create local full archive packages:
 
 ```bash
 pnpm release:package
 ```
 
 Release archives are written to `dist/release/` with `SHA256SUMS.txt`.
+
+Create a local single-file executable for the current platform:
+
+```bash
+pnpm release:executable
+```
+
+Create a specific executable target:
+
+```bash
+pnpm release:executable -- --target=darwin-arm64
+```
+
+Executable assets are written to `dist/executables/`.
 
 ## License Policy
 

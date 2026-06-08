@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { resolve } from "node:path";
 import pc from "picocolors";
 import { checkbox, confirm } from "@inquirer/prompts";
+import { getEmbeddedWebAssets } from "./runtime-web-assets";
 import {
   CapabilityGraphBuilder,
   Doctor,
@@ -17,7 +18,7 @@ const program = new Command();
 program
   .name("kakashi")
   .description("GitHub multi-repository capability fusion orchestrator for Codex CLI/Desktop.")
-  .version("0.1.0");
+  .version("0.2.0");
 
 program
   .command("doctor")
@@ -98,7 +99,8 @@ program
     const { startServer } = await import("@kakashi/server");
     const webDir =
       options.web === false ? undefined : options.webDir ? resolve(process.cwd(), options.webDir) : process.env.KAKASHI_WEB_DIST;
-    await startServer({ port: Number(options.port), workDir: process.cwd(), webDir });
+    const webAssets = options.web === false || webDir ? undefined : getEmbeddedWebAssets();
+    await startServer({ port: Number(options.port), workDir: process.cwd(), webDir, webAssets });
   });
 
 program
