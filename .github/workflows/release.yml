@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example v0.1.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify release build
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test:coverage
+
+      - name: Build release packages
+        env:
+          RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
+        run: pnpm release:package
+
+      - name: Create release notes
+        env:
+          RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
+        run: |
+          cat > release-notes.md <<EOF
+          # Kakashi ${RELEASE_VERSION}
+
+          This release includes prebuilt Kakashi CLI archives for:
+
+          - linux-x64
+          - linux-arm64
+          - darwin-x64
+          - darwin-arm64
+          - windows-x64
+          - windows-arm64
+
+          Each archive contains the standalone Node-based Kakashi CLI bundle and the built Web UI. Node.js 24+, Git, GitHub CLI authentication, and Codex CLI are still required at runtime.
+
+          See README.md in this repository, and INSTALL.md inside each archive, for CLI and Web UI usage.
+          EOF
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
+        run: |
+          if gh release view "$RELEASE_VERSION" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_VERSION" dist/release/*.tar.gz dist/release/SHA256SUMS.txt --clobber
+          else
+            gh release create "$RELEASE_VERSION" dist/release/*.tar.gz dist/release/SHA256SUMS.txt \
+              --title "Kakashi $RELEASE_VERSION" \
+              --notes-file release-notes.md
+          fi

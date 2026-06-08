@@ -1,0 +1,36 @@
+{
+  "name": "kakashi",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @kakashi/server dev",
+    "dev:web": "pnpm --filter @kakashi/web dev",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "RUN_REAL_INTEGRATION=1 vitest run -c vitest.integration.config.ts",
+    "test:codex": "RUN_CODEX_INTEGRATION=1 vitest run -c vitest.integration.config.ts tests/integration/codex-real.test.ts",
+    "test:e2e": "playwright test",
+    "release:package": "node scripts/build-release.mjs",
+    "kakashi": "node apps/cli/dist/index.js",
+    "doctor": "node apps/cli/dist/index.js doctor"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.57.0",
+    "@types/node": "^24.10.1",
+    "@vitest/coverage-v8": "^4.0.15",
+    "esbuild": "^0.27.7",
+    "eslint": "^9.39.1",
+    "tsx": "^4.20.6",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.0",
+    "vitest": "^4.0.15"
+  }
+}

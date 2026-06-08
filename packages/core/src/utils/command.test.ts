@@ -1,0 +1,85 @@
+import { describe, expect, it } from "vitest";
+import { findExecutable, runCommand, shellJoin } from "./command";
+
+describe("runCommand", () => {
+  it("terminates a long-running process after matching real readiness output", async () => {
+    const result = await runCommand(
+      process.execPath,
+      ["-e", "console.log('server ready on http://127.0.0.1:3210'); setInterval(() => {}, 1000);"],
+      {
+        cwd: process.cwd(),
+        timeoutMs: 5_000,
+        readyPattern: /server ready/i
+      }
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.signal).toBeNull();
+    expect(result.timedOut).toBe(false);
+    expect(result.stdout).toContain("server ready");
+    expect(result.durationMs).toBeLessThan(5_000);
+  });
+
+  it("captures non-zero exits and redacts streamed stdout", async () => {
+    const result = await runCommand(
+      process.execPath,
+      ["-e", "process.stdin.pipe(process.stdout); process.stdin.on('end', () => process.exit(7));"],
+      {
+        cwd: process.cwd(),
+        input: "api_key=secret-value\n"
+      }
+    );
+
+    expect(result.exitCode).toBe(7);
+    expect(result.signal).toBeNull();
+    expect(result.stdout).toContain("[REDACTED]");
+    expect(result.stdout).not.toContain("secret-value");
+  });
+
+  it("captures stderr/stdout callbacks, timeouts, and long-output truncation", async () => {
+    let stdout = "";
+    let stderr = "";
+    const callbackResult = await runCommand(
+      process.execPath,
+      ["-e", "console.log('callback-out'); console.error('callback-err')"],
+      {
+        cwd: process.cwd(),
+        onStdout: (chunk) => {
+          stdout += chunk;
+        },
+        onStderr: (chunk) => {
+          stderr += chunk;
+        }
+      }
+    );
+
+    expect(callbackResult.exitCode).toBe(0);
+    expect(stdout).toContain("callback-out");
+    expect(stderr).toContain("callback-err");
+
+    const timeoutResult = await runCommand(process.execPath, ["-e", "setInterval(() => {}, 1000);"], {
+      cwd: process.cwd(),
+      timeoutMs: 50
+    });
+    expect(timeoutResult.timedOut).toBe(true);
+    expect(timeoutResult.exitCode).toBeNull();
+
+    const longResult = await runCommand(process.execPath, ["-e", "console.log('x'.repeat(81000))"], {
+      cwd: process.cwd()
+    });
+    expect(longResult.stdout).toContain("[truncated");
+  });
+
+  it("rejects spawn errors and finds executables on PATH", async () => {
+    await expect(runCommand("kakashi-definitely-missing-command", [], { cwd: process.cwd() })).rejects.toThrow();
+    await expect(findExecutable("kakashi-definitely-missing-command")).resolves.toBeNull();
+    await expect(findExecutable("node")).resolves.toEqual(expect.stringContaining("/"));
+  });
+});
+
+describe("shellJoin", () => {
+  it("quotes shell arguments only when needed", () => {
+    expect(shellJoin(["npm", "run", "test:e2e"])).toBe("npm run test:e2e");
+    expect(shellJoin(["node", "-e", "console.log('hello world')"])).toBe("node -e \"console.log('hello world')\"");
+  });
+});

@@ -1,0 +1,345 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { Activity, CheckCircle2, GitBranch, Play, RefreshCw, Search, ShieldCheck, SquareTerminal } from "lucide-react";
+import "./styles.css";
+
+type RunStage =
+  | "created"
+  | "parsing"
+  | "searching"
+  | "analyzing"
+  | "planning"
+  | "waiting_for_selection"
+  | "waiting_for_confirmation"
+  | "materializing"
+  | "executing"
+  | "verifying"
+  | "exporting"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+interface RepoCandidate {
+  fullName: string;
+  htmlUrl: string;
+  description: string;
+  stars: number;
+  language: string | null;
+  license: string | null;
+  score: number;
+}
+
+interface Capability {
+  id: string;
+  name: string;
+}
+
+interface CapabilityGraph {
+  capabilities: Capability[];
+  edges: Array<{ capabilityId: string; repoFullName: string; confidence: number; evidence: string[] }>;
+  gaps: Capability[];
+}
+
+interface RunState {
+  runId: string;
+  mode: "auto" | "interactive";
+  stage: RunStage;
+  requirementText: string;
+  outputDir: string;
+  candidates?: RepoCandidate[];
+  graph?: CapabilityGraph;
+  plan?: {
+    main: { repo: RepoCandidate };
+    auxiliaries: Array<{ repo: RepoCandidate }>;
+    tasks: Array<{ title: string; successCriteria: string[] }>;
+  };
+  report?: { verification: { summary: string; ok: boolean } };
+  error?: string;
+}
+
+interface RunEvent {
+  id: string;
+  timestamp: string;
+  stage: RunStage;
+  level: "info" | "warn" | "error";
+  message: string;
+}
+
+function App() {
+  const [runs, setRuns] = useState<RunState[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [active, setActive] = useState<RunState | null>(null);
+  const [events, setEvents] = useState<RunEvent[]>([]);
+  const [requirement, setRequirement] = useState("");
+  const [outputDir, setOutputDir] = useState("kakashi-output");
+  const [mode, setMode] = useState<"auto" | "interactive">("auto");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void refreshRuns();
+  }, []);
+
+  useEffect(() => {
+    if (!activeId) return;
+    let closed = false;
+    const source = new EventSource(`/api/runs/${activeId}/events`);
+    source.onmessage = (message) => {
+      if (closed) return;
+      const event = JSON.parse(message.data) as RunEvent;
+      setEvents((current) => [...current, event]);
+      void loadRun(activeId);
+    };
+    source.onerror = () => {
+      source.close();
+    };
+    void loadRun(activeId);
+    return () => {
+      closed = true;
+      source.close();
+    };
+  }, [activeId]);
+
+  const groupedEdges = useMemo(() => {
+    const graph = active?.graph;
+    if (!graph) return [];
+    return graph.capabilities.map((capability) => ({
+      capability,
+      edges: graph.edges.filter((edge) => edge.capabilityId === capability.id).slice(0, 3)
+    }));
+  }, [active]);
+
+  async function refreshRuns() {
+    const response = await fetch("/api/runs");
+    const data = (await response.json()) as RunState[];
+    setRuns(data);
+    if (!activeId && data[0]) setActiveId(data[0].runId);
+  }
+
+  async function loadRun(runId: string) {
+    const response = await fetch(`/api/runs/${runId}`);
+    if (!response.ok) return;
+    const data = (await response.json()) as RunState;
+    setActive(data);
+    await refreshRuns();
+  }
+
+  async function createRun(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    const response = await fetch("/api/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode,
+        requirement,
+        outputDir,
+        options: { maxRepos: 12, maxIterations: 3, force: false }
+      })
+    });
+    setBusy(false);
+    if (!response.ok) {
+      alert((await response.json()).error);
+      return;
+    }
+    const state = (await response.json()) as RunState;
+    setEvents([]);
+    setActiveId(state.runId);
+    setRequirement("");
+    await refreshRuns();
+  }
+
+  async function confirmPlan(confirmed: boolean) {
+    if (!active) return;
+    await fetch(`/api/runs/${active.runId}/confirm-plan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmed })
+    });
+    await loadRun(active.runId);
+  }
+
+  return (
+    <main className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark">K</div>
+          <div>
+            <h1>Kakashi</h1>
+            <p>Codex capability fusion</p>
+          </div>
+        </div>
+
+        <form className="new-run" onSubmit={createRun}>
+          <label>
+            Requirement
+            <textarea
+              value={requirement}
+              onChange={(event) => setRequirement(event.target.value)}
+              required
+              rows={5}
+              placeholder="Describe the software you want to build"
+            />
+          </label>
+          <label>
+            Output directory
+            <input value={outputDir} onChange={(event) => setOutputDir(event.target.value)} required />
+          </label>
+          <div className="segmented">
+            <button type="button" className={mode === "auto" ? "selected" : ""} onClick={() => setMode("auto")}>
+              <Play size={15} /> Auto
+            </button>
+            <button type="button" className={mode === "interactive" ? "selected" : ""} onClick={() => setMode("interactive")}>
+              <SquareTerminal size={15} /> Interactive
+            </button>
+          </div>
+          <button className="primary" disabled={busy || !requirement.trim()}>
+            {busy ? <RefreshCw size={16} className="spin" /> : <Search size={16} />}
+            Start run
+          </button>
+        </form>
+
+        <section className="run-list">
+          <h2>Runs</h2>
+          {runs.map((run) => (
+            <button key={run.runId} className={run.runId === activeId ? "run selected" : "run"} onClick={() => setActiveId(run.runId)}>
+              <span>{run.requirementText}</span>
+              <small>{run.stage}</small>
+            </button>
+          ))}
+        </section>
+      </aside>
+
+      <section className="workspace">
+        {!active ? (
+          <EmptyState />
+        ) : (
+          <>
+            <header className="workspace-header">
+              <div>
+                <p className="run-id">{active.runId}</p>
+                <h2>{active.requirementText}</h2>
+                <p>{active.outputDir}</p>
+              </div>
+              <Status stage={active.stage} />
+            </header>
+
+            <section className="panel-grid">
+              <Panel title="Candidate Repositories" icon={<GitBranch size={18} />}>
+                <div className="table">
+                  {(active.candidates ?? []).map((repo) => (
+                    <a className="repo-row" href={repo.htmlUrl} target="_blank" rel="noreferrer" key={repo.fullName}>
+                      <strong>{repo.fullName}</strong>
+                      <span>{repo.language ?? "unknown"}</span>
+                      <span>{repo.license ?? "no license"}</span>
+                      <span>{repo.stars} stars</span>
+                    </a>
+                  ))}
+                  {(active.candidates ?? []).length === 0 && <p className="muted">Candidates will appear after GitHub search completes.</p>}
+                </div>
+              </Panel>
+
+              <Panel title="Capability Graph" icon={<Activity size={18} />}>
+                <div className="graph">
+                  {groupedEdges.map(({ capability, edges }) => (
+                    <div className="capability" key={capability.id}>
+                      <strong>{capability.name}</strong>
+                      {edges.length === 0 ? (
+                        <span className="gap">gap</span>
+                      ) : (
+                        edges.map((edge) => (
+                          <span key={`${capability.id}-${edge.repoFullName}`}>
+                            {edge.repoFullName} · {Math.round(edge.confidence * 100)}%
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  ))}
+                  {groupedEdges.length === 0 && <p className="muted">Capability graph is built from real repository analysis.</p>}
+                </div>
+              </Panel>
+            </section>
+
+            <section className="panel-grid">
+              <Panel title="Fusion Plan" icon={<ShieldCheck size={18} />}>
+                {active.plan ? (
+                  <div className="plan">
+                    <p>
+                      Main: <strong>{active.plan.main.repo.fullName}</strong>
+                    </p>
+                    <p>Auxiliary: {active.plan.auxiliaries.map((source) => source.repo.fullName).join(", ") || "none"}</p>
+                    <ol>
+                      {active.plan.tasks.map((task) => (
+                        <li key={task.title}>{task.title}</li>
+                      ))}
+                    </ol>
+                    {active.stage === "waiting_for_confirmation" && (
+                      <div className="actions">
+                        <button className="primary" onClick={() => void confirmPlan(true)}>
+                          Execute
+                        </button>
+                        <button onClick={() => void confirmPlan(false)}>Cancel</button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="muted">Plan appears after repository analysis.</p>
+                )}
+              </Panel>
+
+              <Panel title="Live Events" icon={<SquareTerminal size={18} />}>
+                <div className="events">
+                  {events.map((event) => (
+                    <div className={`event ${event.level}`} key={event.id}>
+                      <span>{event.stage}</span>
+                      <p>{event.message}</p>
+                    </div>
+                  ))}
+                  {events.length === 0 && <p className="muted">Run events stream here as SSE messages.</p>}
+                </div>
+              </Panel>
+            </section>
+          </>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function Status({ stage }: { stage: RunStage }) {
+  const done = stage === "completed";
+  const failed = stage === "failed" || stage === "cancelled";
+  return (
+    <div className={failed ? "status failed" : done ? "status done" : "status active"}>
+      {done ? <CheckCircle2 size={18} /> : <Activity size={18} />}
+      {stage}
+    </div>
+  );
+}
+
+function Panel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="panel">
+      <header>
+        {icon}
+        <h3>{title}</h3>
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="empty-state">
+      <h2>Create a Kakashi run</h2>
+      <p>Use the form to start real GitHub search, repository analysis, Codex execution, and verification.</p>
+    </div>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
