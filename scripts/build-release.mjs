@@ -98,33 +98,45 @@ node "%SCRIPT_DIR%kakashi.mjs" %*\r
 function installGuide(currentVersion, target) {
   return `# Kakashi ${currentVersion} (${target})
 
-## Requirements
+## 环境要求 / Requirements
+
+归档包运行时需要：
+
+English: Release archives require:
 
 - Node.js 24+
 - Git
-- GitHub CLI authenticated with \`gh auth login\` or \`GITHUB_TOKEN\` / \`GH_TOKEN\`
-- Codex CLI available as \`codex\`
+- 已认证的 GitHub CLI：\`gh auth login\`，或 \`GITHUB_TOKEN\` / \`GH_TOKEN\`。 / GitHub CLI authenticated with \`gh auth login\` or \`GITHUB_TOKEN\` / \`GH_TOKEN\`.
+- 可用的 Codex CLI：命令名为 \`codex\`。 / Codex CLI available as \`codex\`.
 
-## CLI
+## 命令行 / CLI
+
+Linux/macOS:
 
 \`\`\`bash
 ./bin/kakashi doctor
 ./bin/kakashi run "Build a TypeScript CLI with tests" --out ./generated --max-repos 8 --max-iterations 2 --force
 \`\`\`
 
-On Windows:
+Windows PowerShell:
 
 \`\`\`powershell
 .\\bin\\kakashi.cmd doctor
 .\\bin\\kakashi.cmd run "Build a TypeScript CLI with tests" --out .\\generated --max-repos 8 --max-iterations 2 --force
 \`\`\`
 
-## Web UI
+## 网页版 / Web UI
+
+启动归档包内置 Web UI：
+
+English: Start the bundled Web UI:
 
 \`\`\`bash
 ./bin/kakashi serve --web-dir ./web --port 4317
 \`\`\`
 
-Open http://127.0.0.1:4317/.
+打开 http://127.0.0.1:4317/.
+
+English: Open http://127.0.0.1:4317/.
 `;
 }

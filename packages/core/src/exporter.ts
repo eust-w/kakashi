@@ -75,41 +75,41 @@ export class Exporter {
         const capabilityMatches = analysis.capabilityMatches
           .map(
             (match) =>
-              `  - ${match.capabilityName}: ${Math.round(match.confidence * 100)}% confidence; evidence: ${formatList(match.evidence)}`
+              `  - ${match.capabilityName}: 置信度 ${Math.round(match.confidence * 100)}% / ${Math.round(match.confidence * 100)}% confidence; 证据 / evidence: ${formatList(match.evidence)}`
           )
           .join("\n");
         const modules = analysis.modules
           .slice(0, 12)
-          .map((module) => `  - \`${module.path}\` (${module.kind}): ${module.summary || "inspected"}`)
+          .map((module) => `  - \`${module.path}\` (${module.kind}): ${module.summary || "已检查 / inspected"}`)
           .join("\n");
         const commands = analysis.commands
-          .map((command) => `  - ${command.purpose}: \`${command.command}\` from ${command.source}`)
+          .map((command) => `  - ${command.purpose}: \`${command.command}\`，来源 / from ${command.source}`)
           .join("\n");
         return [
           `### ${analysis.candidate.fullName} (${role})`,
           "",
           `- URL: ${analysis.candidate.htmlUrl}`,
           `- Clone URL: ${analysis.candidate.cloneUrl}`,
-          `- License: ${analysis.candidate.license ?? "unknown"}`,
-          `- Stars: ${analysis.candidate.stars}; language: ${analysis.candidate.language ?? "unknown"}; default branch: ${analysis.candidate.defaultBranch}`,
-          `- Description: ${analysis.candidate.description || "No description provided."}`,
-          `- Local analysis path: \`${analysis.localPath}\``,
-          `- Stack detected: ${formatList(analysis.stack)}`,
-          `- Package managers detected: ${formatList(analysis.packageManagers)}`,
-          `- Manifests inspected: ${formatList(analysis.manifests)}`,
+          `- 许可证 / License: ${analysis.candidate.license ?? "unknown"}`,
+          `- Stars: ${analysis.candidate.stars}; 语言 / language: ${analysis.candidate.language ?? "unknown"}; 默认分支 / default branch: ${analysis.candidate.defaultBranch}`,
+          `- 描述 / Description: ${analysis.candidate.description || "无描述 / No description provided."}`,
+          `- 本地分析路径 / Local analysis path: \`${analysis.localPath}\``,
+          `- 检测到的技术栈 / Stack detected: ${formatList(analysis.stack)}`,
+          `- 检测到的包管理器 / Package managers detected: ${formatList(analysis.packageManagers)}`,
+          `- 已检查 manifests / Manifests inspected: ${formatList(analysis.manifests)}`,
           "",
-          `Capability matches:`,
-          capabilityMatches || "  - none",
+          `能力匹配 / Capability matches:`,
+          capabilityMatches || "  - 无 / none",
           "",
-          `Commands detected:`,
-          commands || "  - none",
+          `检测到的命令 / Commands detected:`,
+          commands || "  - 无 / none",
           "",
-          `Source areas inspected / prepared for Codex reference:`,
-          modules || "  - no common source roots detected",
+          `已检查并提供给 Codex 参考的源码区域 / Source areas inspected and prepared for Codex reference:`,
+          modules || "  - 未检测到常见源码目录 / no common source roots detected",
           "",
-          `README summary: ${analysis.readmeSummary || "No README summary available."}`,
+          `README 摘要 / README summary: ${analysis.readmeSummary || "无 README 摘要 / No README summary available."}`,
           "",
-          `Risks: ${formatList(analysis.risks)}`
+          `风险 / Risks: ${formatList(analysis.risks)}`
         ].join("\n");
       })
       .join("\n\n");
@@ -120,9 +120,9 @@ export class Exporter {
         return [
           `### ${source.role}: ${source.repo.fullName}`,
           "",
-          `- Purpose in fusion: ${source.rationale}`,
-          `- Capabilities used: ${formatList(capabilities)}`,
-          `- Source checkout used by Codex: \`${source.localPath}\``
+          `- 融合用途 / Purpose in fusion: ${source.rationale}`,
+          `- 使用的能力 / Capabilities used: ${formatList(capabilities)}`,
+          `- Codex 使用的源码 checkout / Source checkout used by Codex: \`${source.localPath}\``
         ].join("\n");
       })
       .join("\n\n");
@@ -131,8 +131,8 @@ export class Exporter {
       .map((capability) => {
         const providers = report.plan.graph.edges
           .filter((edge) => edge.capabilityId === capability.id)
-          .map((edge) => `${edge.repoFullName} (${Math.round(edge.confidence * 100)}%, evidence: ${formatList(edge.evidence)})`);
-        return `- ${capability.name}: ${providers.length > 0 ? providers.join("; ") : "gap detected"}`;
+          .map((edge) => `${edge.repoFullName} (${Math.round(edge.confidence * 100)}%, 证据 / evidence: ${formatList(edge.evidence)})`);
+        return `- ${capability.name}: ${providers.length > 0 ? providers.join("; ") : "检测到缺口 / gap detected"}`;
       })
       .join("\n");
 
@@ -151,7 +151,7 @@ export class Exporter {
               `  - ${step.ok ? "PASS" : "FAIL"} ${step.name}: \`${step.command}\` (exit ${step.result.exitCode ?? "signal"}, ${step.result.durationMs}ms)`
           )
           .join("\n");
-        return [`### Verification Attempt ${index + 1}`, "", attempt.summary, "", steps || "  - No verification steps executed."].join("\n");
+        return [`### 验证尝试 ${index + 1} / Verification Attempt ${index + 1}`, "", attempt.summary, "", steps || "  - 未执行验证步骤 / No verification steps executed."].join("\n");
       })
       .join("\n\n");
 
@@ -159,89 +159,93 @@ export class Exporter {
       .map((run, index) => {
         const parsed = parseCodexFinalMessage(run.finalMessage);
         return [
-          `### Codex Iteration ${index + 1}`,
+          `### Codex 迭代 ${index + 1} / Codex Iteration ${index + 1}`,
           "",
-          `- Exit code: ${run.exitCode}`,
-          `- Command: \`${run.result.command}\``,
-          `- Duration: ${run.result.durationMs}ms`,
+          `- 退出码 / Exit code: ${run.exitCode}`,
+          `- 命令 / Command: \`${run.result.command}\``,
+          `- 耗时 / Duration: ${run.result.durationMs}ms`,
           parsed
             ? [
-                `- Summary: ${parsed.summary}`,
-                `- Changed files: ${formatList(parsed.changedFiles)}`,
-                `- Verification notes: ${parsed.verificationNotes}`,
-                `- Blockers: ${formatList(parsed.blockers)}`
+                `- 摘要 / Summary: ${parsed.summary}`,
+                `- 修改文件 / Changed files: ${formatList(parsed.changedFiles)}`,
+                `- 验证说明 / Verification notes: ${parsed.verificationNotes}`,
+                `- 阻塞项 / Blockers: ${formatList(parsed.blockers)}`
               ].join("\n")
-            : `Final message:\n\n${run.finalMessage}`
+            : `最终消息 / Final message:\n\n${run.finalMessage}`
         ].join("\n");
       })
       .join("\n\n");
 
     const loopSummary =
       report.codexRuns.length > 1 || report.verificationAttempts.length > 1
-        ? `Yes. Kakashi ran ${report.codexRuns.length} Codex iteration(s) and ${report.verificationAttempts.length} verifier attempt(s).`
-        : `No repair loop was needed. Kakashi ran ${report.codexRuns.length} Codex iteration(s) and ${report.verificationAttempts.length} verifier attempt(s).`;
+        ? `是。Kakashi 执行了 ${report.codexRuns.length} 次 Codex 迭代和 ${report.verificationAttempts.length} 次 verifier 尝试。\n\nEnglish: Yes. Kakashi ran ${report.codexRuns.length} Codex iteration(s) and ${report.verificationAttempts.length} verifier attempt(s).`
+        : `无需修复回环。Kakashi 执行了 ${report.codexRuns.length} 次 Codex 迭代和 ${report.verificationAttempts.length} 次 verifier 尝试。\n\nEnglish: No repair loop was needed. Kakashi ran ${report.codexRuns.length} Codex iteration(s) and ${report.verificationAttempts.length} verifier attempt(s).`;
 
     const content = [
-      `# Kakashi Full Process Report`,
+      `# Kakashi 完整流程报告 / Full Process Report`,
       "",
-      `Run: \`${report.runId}\``,
-      `Completed: ${report.completedAt}`,
-      `Output directory: \`${report.outputDir}\``,
+      `运行 ID / Run: \`${report.runId}\``,
+      `完成时间 / Completed: ${report.completedAt}`,
+      `输出目录 / Output directory: \`${report.outputDir}\``,
       "",
-      `## Requirement`,
+      `## 需求 / Requirement`,
       "",
       report.requirement.raw,
       "",
-      `- Target: ${report.requirement.target}`,
-      `- Preferred stack: ${formatList(report.requirement.preferredStack)}`,
-      `- Constraints: ${formatList(report.requirement.constraints)}`,
-      `- Parsed capabilities: ${formatList(report.requirement.capabilities.map((capability) => capability.name))}`,
+      `- 目标 / Target: ${report.requirement.target}`,
+      `- 偏好技术栈 / Preferred stack: ${formatList(report.requirement.preferredStack)}`,
+      `- 约束 / Constraints: ${formatList(report.requirement.constraints)}`,
+      `- 解析出的能力 / Parsed capabilities: ${formatList(report.requirement.capabilities.map((capability) => capability.name))}`,
       "",
-      `## GitHub Projects Analyzed`,
+      `## 已分析的 GitHub 项目 / GitHub Projects Analyzed`,
       "",
-      `Kakashi analyzed ${report.plan.graph.repos.length} real GitHub repository candidate(s).`,
+      `Kakashi 分析了 ${report.plan.graph.repos.length} 个真实 GitHub 仓库候选项。`,
       "",
-      analyzedRepos || "No repositories were analyzed.",
+      `English: Kakashi analyzed ${report.plan.graph.repos.length} real GitHub repository candidate(s).`,
       "",
-      `## Capability Graph`,
+      analyzedRepos || "未分析仓库。 / No repositories were analyzed.",
       "",
-      capabilityGraph || "No capability graph edges were produced.",
+      `## 能力图谱 / Capability Graph`,
       "",
-      `Unresolved gaps: ${formatList(report.plan.graph.gaps.map((capability) => capability.name))}`,
+      capabilityGraph || "未生成能力图谱边。 / No capability graph edges were produced.",
       "",
-      `## Selected Fusion Sources`,
+      `未解决缺口 / Unresolved gaps: ${formatList(report.plan.graph.gaps.map((capability) => capability.name))}`,
       "",
-      selectedSources || "No selected sources were recorded.",
+      `## 选中的融合来源 / Selected Fusion Sources`,
       "",
-      `## Fusion Goal and Tasks`,
+      selectedSources || "未记录选中的来源。 / No selected sources were recorded.",
       "",
-      `Final target: ${report.requirement.goal}`,
+      `## 融合目标和任务 / Fusion Goal and Tasks`,
       "",
-      tasks || "No Codex tasks were generated.",
+      `最终目标 / Final target: ${report.requirement.goal}`,
       "",
-      `## Capability Collection Scope`,
+      tasks || "未生成 Codex 任务。 / No Codex tasks were generated.",
       "",
-      "Kakashi provided Codex with the selected source repository checkouts and the inspected source areas listed above. Exact source-derived edits are reflected in Codex iteration output and the final project diff; Kakashi does not report a module as collected unless it was selected as a main or auxiliary source.",
+      `## 能力采集范围 / Capability Collection Scope`,
       "",
-      `## Codex Execution`,
+      "Kakashi 会把选中的源码仓库 checkout 和上面列出的已检查源码区域提供给 Codex。具体来自源码的改动体现在 Codex 迭代输出和最终项目 diff 中；除非某个仓库被选为主来源或辅助来源，否则 Kakashi 不会把它报告为已采集模块。",
       "",
-      codexIterations || "No Codex execution was recorded.",
+      "English: Kakashi provided Codex with the selected source repository checkouts and the inspected source areas listed above. Exact source-derived edits are reflected in Codex iteration output and the final project diff; Kakashi does not report a module as collected unless it was selected as a main or auxiliary source.",
       "",
-      `## Verification and Repair Loop`,
+      `## Codex 执行 / Codex Execution`,
+      "",
+      codexIterations || "未记录 Codex 执行。 / No Codex execution was recorded.",
+      "",
+      `## 验证和修复回环 / Verification and Repair Loop`,
       "",
       loopSummary,
       "",
       report.verification.summary,
       "",
-      verificationAttempts || "- No verification attempts were recorded.",
+      verificationAttempts || "- 未记录验证尝试。 / No verification attempts were recorded.",
       "",
-      `## Exported Artifacts`,
+      `## 导出产物 / Exported Artifacts`,
       "",
-      "- `README.md`: generated project usage notes plus Kakashi summary.",
-      "- `KAKASHI_REPORT.md`: this human-readable full process report.",
-      "- `SOURCE_PROVENANCE.json`: source repository provenance and selected capability metadata.",
-      "- `.kakashi/run-report.json`: machine-readable run state, graph, Codex results, and verifier results.",
-      "- `.kakashi/licenses/`: copied license files from selected source repositories when present."
+      "- `README.md`: 生成项目的使用说明和 Kakashi 摘要。 / Generated project usage notes plus Kakashi summary.",
+      "- `KAKASHI_REPORT.md`: 当前这份人类可读的完整流程报告。 / This human-readable full process report.",
+      "- `SOURCE_PROVENANCE.json`: 源仓库来源和选中能力元数据。 / Source repository provenance and selected capability metadata.",
+      "- `.kakashi/run-report.json`: 机器可读的运行状态、图谱、Codex 结果和 verifier 结果。 / Machine-readable run state, graph, Codex results, and verifier results.",
+      "- `.kakashi/licenses/`: 选中源仓库的许可证文件副本。 / Copied license files from selected source repositories when present."
     ].join("\n");
     await writeFileSafe(join(report.outputDir, "KAKASHI_REPORT.md"), content);
   }
@@ -250,15 +254,19 @@ export class Exporter {
     const readmePath = join(plan.outputDir, "README.md");
     const section = [
       "",
-      "## Kakashi Fusion",
+      "## Kakashi 融合说明 / Kakashi Fusion",
       "",
-      `This project was produced by Kakashi from requirement: ${plan.requirement.raw}`,
+      `本项目由 Kakashi 基于以下需求生成：${plan.requirement.raw}`,
       "",
-      "### Source Provenance",
+      `English: This project was produced by Kakashi from requirement: ${plan.requirement.raw}`,
       "",
-      `See \`SOURCE_PROVENANCE.json\` and \`.kakashi/licenses/\` for source repository metadata and license files.`,
+      "### 来源追踪 / Source Provenance",
       "",
-      "### Verification",
+      `源仓库元数据和许可证文件见 \`SOURCE_PROVENANCE.json\` 与 \`.kakashi/licenses/\`。`,
+      "",
+      `English: See \`SOURCE_PROVENANCE.json\` and \`.kakashi/licenses/\` for source repository metadata and license files.`,
+      "",
+      "### 验证 / Verification",
       "",
       verification.summary,
       "",
@@ -268,12 +276,12 @@ export class Exporter {
 
     if (await pathExists(readmePath)) {
       const existing = await readFile(readmePath, "utf8");
-      if (!existing.includes("## Kakashi Fusion")) {
+      if (!existing.includes("## Kakashi 融合说明 / Kakashi Fusion") && !existing.includes("## Kakashi Fusion")) {
         await writeFileSafe(readmePath, `${existing.trimEnd()}\n${section}`);
       }
       return;
     }
-    await writeFileSafe(readmePath, `# Fused Project\n${section}`);
+    await writeFileSafe(readmePath, `# 融合项目 / Fused Project\n${section}`);
   }
 }
 

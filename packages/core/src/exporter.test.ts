@@ -153,12 +153,13 @@ describe("Exporter", () => {
     await new Exporter().exportReport("run_test", plan, verification, [codexRun], [verification]);
     const report = await readFile(join(outputDir, "KAKASHI_REPORT.md"), "utf8");
 
-    expect(report).toContain("# Kakashi Full Process Report");
-    expect(report).toContain("## GitHub Projects Analyzed");
+    expect(report).toContain("# Kakashi 完整流程报告 / Full Process Report");
+    expect(report).toContain("## 已分析的 GitHub 项目 / GitHub Projects Analyzed");
     expect(report).toContain("example/main-app (main)");
-    expect(report).toContain("## Selected Fusion Sources");
-    expect(report).toContain("## Capability Collection Scope");
-    expect(report).toContain("## Verification and Repair Loop");
+    expect(report).toContain("## 选中的融合来源 / Selected Fusion Sources");
+    expect(report).toContain("## 能力采集范围 / Capability Collection Scope");
+    expect(report).toContain("## 验证和修复回环 / Verification and Repair Loop");
+    expect(report).toContain("无需修复回环");
     expect(report).toContain("No repair loop was needed");
   });
 });
