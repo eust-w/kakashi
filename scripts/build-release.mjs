@@ -115,6 +115,62 @@ English: Release archives require:
 - 已认证的 GitHub CLI：\`gh auth login\`，或 \`GITHUB_TOKEN\` / \`GH_TOKEN\`。 / GitHub CLI authenticated with \`gh auth login\` or \`GITHUB_TOKEN\` / \`GH_TOKEN\`.
 - 可用的 Codex CLI：命令名为 \`codex\`。 / Codex CLI available as \`codex\`.
 
+## 配置 / Configuration
+
+Kakashi 本身没有单独的 Kakashi API Key。它需要 GitHub 认证和 Codex 认证。
+
+English: Kakashi does not have a separate Kakashi API key. It needs GitHub authentication and Codex authentication.
+
+配置 GitHub：
+
+English: Configure GitHub:
+
+\`\`\`bash
+gh auth login
+gh auth status
+\`\`\`
+
+无交互环境可以使用环境变量：
+
+English: In non-interactive environments, use an environment variable:
+
+\`\`\`bash
+export GH_TOKEN="github_pat_xxx"
+# 或 / or
+export GITHUB_TOKEN="github_pat_xxx"
+\`\`\`
+
+配置 Codex：
+
+English: Configure Codex:
+
+\`\`\`bash
+codex login
+codex login status
+\`\`\`
+
+如果使用 OpenAI API Key：
+
+English: If you use an OpenAI API key:
+
+\`\`\`bash
+export OPENAI_API_KEY="sk-..."
+printenv OPENAI_API_KEY | codex login --with-api-key
+codex login status
+\`\`\`
+
+不要把 API Key、GitHub token 或 access token 写进代码、README、issue、日志或生成项目。
+
+English: Do not commit API keys, GitHub tokens, or access tokens to source code, README files, issues, logs, or generated projects.
+
+验证配置：
+
+English: Verify configuration:
+
+\`\`\`bash
+./bin/kakashi doctor
+\`\`\`
+
 ## 命令行 / CLI
 
 Linux/macOS:

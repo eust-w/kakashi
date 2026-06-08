@@ -36,6 +36,142 @@ For release archives or source development:
 - Codex CLI available as `codex`
 - pnpm 10+ when developing from source
 
+## Configuration
+
+Kakashi does not have a separate Kakashi API key. It relies on two external authentication paths:
+
+- GitHub authentication, used to search, inspect, and clone GitHub repositories.
+- Codex authentication, used to run `codex exec` for code changes and repair loops.
+
+### 1. Configure GitHub
+
+The recommended path is GitHub CLI login:
+
+```bash
+gh auth login
+gh auth status
+```
+
+For CI, servers, or non-interactive environments, use an environment variable:
+
+```bash
+export GH_TOKEN="github_pat_xxx"
+# or
+export GITHUB_TOKEN="github_pat_xxx"
+```
+
+Kakashi resolves GitHub authentication in this order:
+
+1. `GITHUB_TOKEN`
+2. `GH_TOKEN`
+3. `gh auth token`
+
+For public repositories, a normal GitHub CLI login is usually enough. For private repositories, make sure the token or logged-in GitHub account has access to those repositories.
+
+### 2. Configure Codex
+
+Kakashi calls the local `codex exec` command, so Codex CLI must work independently before Kakashi can execute real code changes.
+
+Use browser/device login:
+
+```bash
+codex login
+codex login status
+```
+
+Use an OpenAI API key:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+printenv OPENAI_API_KEY | codex login --with-api-key
+codex login status
+```
+
+Or use a Codex access token:
+
+```bash
+export CODEX_ACCESS_TOKEN="..."
+printenv CODEX_ACCESS_TOKEN | codex login --with-access-token
+codex login status
+```
+
+Do not commit API keys, GitHub tokens, or access tokens to source code, README files, issues, logs, or generated projects. Use a system credential manager, CI secrets, shell session environment variables, or the credential storage managed by `gh auth login` / `codex login`.
+
+### 3. Verify Configuration
+
+Run:
+
+```bash
+kakashi doctor
+```
+
+If you use the single-file executable:
+
+```bash
+./kakashi-v0.2.0-darwin-arm64 doctor
+```
+
+If you run from source:
+
+```bash
+pnpm kakashi doctor
+```
+
+Expected successful checks include:
+
+- `PASS git`
+- `PASS gh`
+- `PASS codex`
+- `PASS github-auth`
+- `PASS codex-version`
+- `PASS gh-version`
+- `PASS git-version`
+
+### 4. Web UI Configuration
+
+The Web UI does not have a separate API key configuration. It uses the same system environment and PATH as the Kakashi server process.
+
+In the same terminal, verify:
+
+```bash
+gh auth status
+codex login status
+kakashi doctor
+```
+
+Then start the Web UI:
+
+```bash
+kakashi serve --port 4317
+```
+
+If you run the source development server, start the server from the same shell environment:
+
+```bash
+pnpm --filter @kakashi/server dev
+pnpm --filter @kakashi/web dev
+```
+
+### 5. Optional Configuration
+
+Specify a Codex model:
+
+```bash
+kakashi run "Build a TypeScript CLI with tests" --out ./generated --model <codex-model-name>
+```
+
+Adjust GitHub analysis size and repair loop count:
+
+```bash
+kakashi run "Build a dashboard" --out ./generated --max-repos 12 --max-iterations 3
+```
+
+Allow copyleft-licensed repositories:
+
+```bash
+kakashi run "Build a dashboard" --out ./generated --allow-copyleft
+```
+
 ## Install From GitHub Release
 
 Prefer downloading the single-file executable that matches your system:
