@@ -2,48 +2,111 @@
 
 Language: [简体中文](README.md) | English
 
-Kakashi is a Codex-powered open-source capability fusion system. A user describes the software they want, Kakashi searches real GitHub repositories, analyzes repository capabilities, plans a fusion strategy, asks Codex CLI to modify code, verifies the generated project, and exports provenance plus verification reports.
+[![CI](https://github.com/eust-w/kakashi/actions/workflows/ci.yml/badge.svg)](https://github.com/eust-w/kakashi/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/eust-w/kakashi?sort=semver)](https://github.com/eust-w/kakashi/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-24%2B-339933)](https://nodejs.org/)
 
-Kakashi does not fork Codex CLI. It treats Codex CLI as the code execution engine and GitHub as the source of open-source capabilities.
+Kakashi is a Codex CLI / Codex Desktop orchestration layer for GitHub multi-repository capability search, fusion, code modification, and verification.
 
-## What It Builds
+Describe the software you want in one sentence. Kakashi searches real GitHub repositories, analyzes capabilities and licenses, selects a main project plus auxiliary sources, creates a fusion plan, asks Codex CLI to modify code, runs real verification, and exports a runnable project with a complete process report.
 
-- Requirement parsing into target, stack, constraints, and capability nodes.
-- Real GitHub repository search through Octokit and `gh`/token authentication.
-- Real repository cloning and static analysis of manifests, commands, stack, modules, README evidence, and license metadata.
-- Capability graph construction and main/auxiliary repository selection.
-- Codex CLI execution through `codex exec` in the generated project.
-- Verification of install/build/test/lint/start commands detected from actual project files.
-- Gap detection from real verifier logs and follow-up GitHub search.
-- CLI and local Web UI for full-auto and interactive runs.
-- Exported full process documentation in `KAKASHI_REPORT.md`, plus `SOURCE_PROVENANCE.json`, `.kakashi/run-report.json`, and copied source license files.
+[Quickstart](#quickstart) · [Configuration](#configuration) · [CLI](#cli) · [Web UI](#web-ui) · [Release](https://github.com/eust-w/kakashi/releases) · [Contributing](#contributing)
 
-## Requirements
+## Why Kakashi
 
-For the single-file executable:
+Many code generation tools start from an empty folder or a single template. Kakashi has a different goal: it treats GitHub as the source of open-source capabilities, Codex as the code execution engine, and multiple repositories as composable inputs for a new runnable project.
 
-- Git
-- GitHub CLI authenticated with `gh auth login`, or `GITHUB_TOKEN` / `GH_TOKEN`
-- Codex CLI available as `codex`
+- It does not fork Codex CLI; it orchestrates Codex CLI / Desktop for code changes.
+- It does not mock GitHub, Codex, or verification results; the default path uses real search, cloning, and command execution.
+- It does not hardcode success paths; failed verification can enter repair loops and remains visible in the report.
+- It outputs code plus provenance, copied licenses, verification logs, and final process documentation.
 
-The single-file executable bundles the Node.js runtime needed to start Kakashi. Generated projects may still need their own language runtimes and package managers during verification.
+```mermaid
+flowchart LR
+  A["User requirement"] --> B["Capability parsing"]
+  B --> C["GitHub search"]
+  C --> D["Repository analysis"]
+  D --> E["Capability graph"]
+  E --> F["Fusion plan"]
+  F --> G["Codex execution"]
+  G --> H["Real verification"]
+  H --> I["Report and export"]
+  H --> J["Gap detection"]
+  J --> C
+```
 
-For release archives or source development:
+## Core Capabilities
 
-- Node.js 24+
-- Git
-- GitHub CLI authenticated with `gh auth login`, or `GITHUB_TOKEN` / `GH_TOKEN`
-- Codex CLI available as `codex`
-- pnpm 10+ when developing from source
+- Requirement Parser: converts natural language into target, stack, constraints, and capability nodes.
+- GitHub Searcher: searches real GitHub repositories through Octokit, `gh`, or token authentication.
+- Repo Analyzer: clones repositories and analyzes manifests, commands, README evidence, modules, stacks, and licenses.
+- Capability Graph: maps which repositories provide which capabilities.
+- Fusion Planner: selects the main project and auxiliary projects, then creates a fusion plan.
+- Codex Executor: calls local `codex exec` for real code changes.
+- Gap Detector: reads verifier failures, identifies missing capabilities, and searches GitHub again.
+- Verifier: detects and runs install, build, test, lint, start, and similar commands.
+- Exporter: writes the new project, README, run commands, verification report, and provenance.
+
+## Quickstart
+
+Make sure Git, GitHub CLI, and Codex CLI are available:
+
+```bash
+git --version
+gh auth status
+codex login status
+```
+
+Download the single-file executable for your system:
+
+- `kakashi-v0.2.0-linux-x64`
+- `kakashi-v0.2.0-linux-arm64`
+- `kakashi-v0.2.0-darwin-x64`
+- `kakashi-v0.2.0-darwin-arm64`
+- `kakashi-v0.2.0-windows-x64.exe`
+- `kakashi-v0.2.0-windows-arm64.exe`
+
+Linux/macOS:
+
+```bash
+chmod +x kakashi-v0.2.0-darwin-arm64
+./kakashi-v0.2.0-darwin-arm64 doctor
+./kakashi-v0.2.0-darwin-arm64 run \
+  "Build a TypeScript CLI with tests" \
+  --out ./generated \
+  --max-repos 8 \
+  --max-iterations 2 \
+  --force
+```
+
+Windows PowerShell:
+
+```powershell
+.\kakashi-v0.2.0-windows-x64.exe doctor
+.\kakashi-v0.2.0-windows-x64.exe run `
+  "Build a TypeScript CLI with tests" `
+  --out .\generated `
+  --max-repos 8 `
+  --max-iterations 2 `
+  --force
+```
+
+Every completed run writes:
+
+- `KAKASHI_REPORT.md`: full process report.
+- `SOURCE_PROVENANCE.json`: source repositories, capability matches, and source references.
+- `.kakashi/run-report.json`: machine-readable run record.
+- `.kakashi/source-licenses/`: copied source repository licenses.
 
 ## Configuration
 
-Kakashi does not have a separate Kakashi API key. It relies on two external authentication paths:
+Kakashi does not have a separate Kakashi API key. It needs two external authentication paths:
 
 - GitHub authentication, used to search, inspect, and clone GitHub repositories.
 - Codex authentication, used to run `codex exec` for code changes and repair loops.
 
-### 1. Configure GitHub
+### GitHub
 
 The recommended path is GitHub CLI login:
 
@@ -68,11 +131,11 @@ Kakashi resolves GitHub authentication in this order:
 
 For public repositories, a normal GitHub CLI login is usually enough. For private repositories, make sure the token or logged-in GitHub account has access to those repositories.
 
-### 2. Configure Codex
+### Codex
 
 Kakashi calls the local `codex exec` command, so Codex CLI must work independently before Kakashi can execute real code changes.
 
-Use browser/device login:
+Use browser or device login:
 
 ```bash
 codex login
@@ -87,7 +150,7 @@ printenv OPENAI_API_KEY | codex login --with-api-key
 codex login status
 ```
 
-Or use a Codex access token:
+Use a Codex access token:
 
 ```bash
 export CODEX_ACCESS_TOKEN="..."
@@ -97,9 +160,7 @@ codex login status
 
 Do not commit API keys, GitHub tokens, or access tokens to source code, README files, issues, logs, or generated projects. Use a system credential manager, CI secrets, shell session environment variables, or the credential storage managed by `gh auth login` / `codex login`.
 
-### 3. Verify Configuration
-
-Run:
+### Verify Configuration
 
 ```bash
 kakashi doctor
@@ -127,80 +188,44 @@ Expected successful checks include:
 - `PASS gh-version`
 - `PASS git-version`
 
-### 4. Web UI Configuration
+## CLI
 
-The Web UI does not have a separate API key configuration. It uses the same system environment and PATH as the Kakashi server process.
-
-In the same terminal, verify:
+Full auto mode:
 
 ```bash
-gh auth status
-codex login status
-kakashi doctor
+kakashi run \
+  "Build a TypeScript web dashboard with GitHub search, capability graph, and live Codex execution logs" \
+  --out ./generated-dashboard \
+  --max-repos 12 \
+  --max-iterations 3
 ```
 
-Then start the Web UI:
+Interactive mode:
 
 ```bash
-kakashi serve --port 4317
+kakashi interactive \
+  "Build a local-first project management app with Kanban, calendar, and export" \
+  --out ./generated-project
 ```
 
-If you run the source development server, start the server from the same shell environment:
+Inspect a previous run:
 
 ```bash
-pnpm --filter @kakashi/server dev
-pnpm --filter @kakashi/web dev
+kakashi inspect <runId>
 ```
 
-### 5. Optional Configuration
+Common options:
 
-Specify a Codex model:
+- `--out <dir>`: output directory.
+- `--max-repos <n>`: maximum number of candidate repositories to analyze.
+- `--max-iterations <n>`: repair-loop attempts after verification failures.
+- `--model <name>`: Codex model name.
+- `--allow-copyleft`: allow copyleft-licensed repositories as candidates.
+- `--force`: allow overwriting the output directory.
 
-```bash
-kakashi run "Build a TypeScript CLI with tests" --out ./generated --model <codex-model-name>
-```
+## Web UI
 
-Adjust GitHub analysis size and repair loop count:
-
-```bash
-kakashi run "Build a dashboard" --out ./generated --max-repos 12 --max-iterations 3
-```
-
-Allow copyleft-licensed repositories:
-
-```bash
-kakashi run "Build a dashboard" --out ./generated --allow-copyleft
-```
-
-## Install From GitHub Release
-
-Prefer downloading the single-file executable that matches your system:
-
-- `kakashi-v0.2.0-linux-x64`
-- `kakashi-v0.2.0-linux-arm64`
-- `kakashi-v0.2.0-darwin-x64`
-- `kakashi-v0.2.0-darwin-arm64`
-- `kakashi-v0.2.0-windows-x64.exe`
-- `kakashi-v0.2.0-windows-arm64.exe`
-
-Verify downloads with the release `SHA256SUMS.txt` file.
-
-Linux/macOS:
-
-```bash
-chmod +x kakashi-v0.2.0-darwin-arm64
-./kakashi-v0.2.0-darwin-arm64 doctor
-./kakashi-v0.2.0-darwin-arm64 run "Build a TypeScript CLI with tests" --out ./generated --max-repos 8 --max-iterations 2 --force
-```
-
-Windows PowerShell:
-
-```powershell
-.\kakashi-v0.2.0-windows-x64.exe doctor
-.\kakashi-v0.2.0-windows-x64.exe run "Build a TypeScript CLI with tests" --out .\generated --max-repos 8 --max-iterations 2 --force
-```
-
-The single-file executable embeds the Web UI. Start it with:
+The single-file executable embeds the Web UI:
 
 ```bash
 ./kakashi-v0.2.0-darwin-arm64 serve --port 4317
@@ -208,7 +233,59 @@ The single-file executable embeds the Web UI. Start it with:
 
 Open `http://127.0.0.1:4317/`.
 
-Release also includes full archive packages for users who prefer a directory with `README.md`, `README-en.md`, `INSTALL.md`, `LICENSE`, wrapper scripts, and Web UI files:
+From source, start the API server:
+
+```bash
+pnpm --filter @kakashi/server dev
+```
+
+Start the Vite UI:
+
+```bash
+pnpm --filter @kakashi/web dev
+```
+
+Open `http://127.0.0.1:5173/`.
+
+For a production-style local Web UI after `pnpm build`, serve the built Web app through the CLI:
+
+```bash
+pnpm kakashi serve --web-dir apps/web/dist --port 4317
+```
+
+Open `http://127.0.0.1:4317/`.
+
+The Web UI does not have a separate API key configuration. It uses the same environment and PATH as the Kakashi server process. In the same terminal, verify:
+
+```bash
+gh auth status
+codex login status
+kakashi doctor
+```
+
+## Source Setup
+
+Source development requires Node.js 24+ and pnpm 10+.
+
+```bash
+pnpm install
+pnpm build
+pnpm run doctor
+```
+
+Source CLI commands:
+
+```bash
+pnpm kakashi run "Build a TypeScript CLI with tests" --out ./generated --force
+pnpm kakashi interactive "Build a local-first notes app" --out ./generated-notes
+pnpm kakashi serve --web-dir apps/web/dist --port 4317
+```
+
+## Release Assets
+
+Prefer the single-file executable. It bundles the Node.js runtime needed to start Kakashi, although generated projects may still need their own language runtimes and package managers during verification.
+
+Release also includes full archive packages for users who prefer a directory-style install with wrapper scripts, install documentation, and Web UI files:
 
 - `kakashi-v0.2.0-linux-x64.tar.gz`
 - `kakashi-v0.2.0-linux-arm64.tar.gz`
@@ -217,9 +294,9 @@ Release also includes full archive packages for users who prefer a directory wit
 - `kakashi-v0.2.0-windows-x64.tar.gz`
 - `kakashi-v0.2.0-windows-arm64.tar.gz`
 
-Each archive contains a standalone Node-based Kakashi CLI bundle, the built Web UI, and an `INSTALL.md` file. Archives still require Node.js 24+, Git, GitHub CLI authentication, and Codex CLI at runtime.
+Verify downloads with the release `SHA256SUMS.txt` file.
 
-Linux/macOS:
+Archive example:
 
 ```bash
 tar -xzf kakashi-v0.2.0-linux-x64.tar.gz
@@ -237,105 +314,11 @@ cd kakashi-v0.2.0-windows-x64
 .\bin\kakashi.cmd run "Build a TypeScript CLI with tests" --out .\generated --max-repos 8 --max-iterations 2 --force
 ```
 
-To use the bundled Web UI from a release archive:
-
-```bash
-./bin/kakashi serve --web-dir ./web --port 4317
-```
-
-Open `http://127.0.0.1:4317/`.
-
-## Source Setup
-
-Run:
-
-```bash
-pnpm install
-pnpm build
-pnpm run doctor
-```
-
-## CLI
-
-Full auto mode:
-
-```bash
-pnpm kakashi run \
-  "Build a TypeScript web dashboard with GitHub search, capability graph, and live Codex execution logs" \
-  --out ./generated-dashboard \
-  --max-repos 12 \
-  --max-iterations 3
-```
-
-Interactive mode:
-
-```bash
-pnpm kakashi interactive \
-  "Build a local-first project management app with Kanban, calendar, and export" \
-  --out ./generated-project
-```
-
-Inspect a previous run:
-
-```bash
-pnpm kakashi inspect <runId>
-```
-
-## Web UI
-
-From source, start the API server:
-
-```bash
-pnpm --filter @kakashi/server dev
-```
-
-Start the Vite UI:
-
-```bash
-pnpm --filter @kakashi/web dev
-```
-
-Open `http://127.0.0.1:5173`.
-
-For a production-style local Web UI after `pnpm build`, serve the built Web app through the CLI:
-
-```bash
-pnpm kakashi serve --web-dir apps/web/dist --port 4317
-```
-
-Open `http://127.0.0.1:4317`.
-
-## Release Build
-
-Create local full archive packages:
-
-```bash
-pnpm release:package
-```
-
-Release archives are written to `dist/release/` with `SHA256SUMS.txt`.
-
-Create a local single-file executable for the current platform:
-
-```bash
-pnpm release:executable
-```
-
-Create a specific executable target:
-
-```bash
-pnpm release:executable -- --target=darwin-arm64
-```
-
-Executable assets are written to `dist/executables/`.
-
 ## License Policy
 
 By default Kakashi only uses repositories with declared permissive SPDX licenses: MIT, Apache-2.0, BSD, ISC, or 0BSD. Pass `--allow-copyleft` to include common copyleft licenses. Repositories without a declared license are excluded by default.
 
-## Project License
-
-Kakashi is released under the MIT License. See `LICENSE`.
+Generated projects include copied source licenses and record source repositories, capability matches, and usage boundaries in `SOURCE_PROVENANCE.json` and `KAKASHI_REPORT.md`. You should still perform a final license review for your own release model.
 
 ## Verification
 
@@ -344,8 +327,10 @@ Local checks:
 ```bash
 pnpm lint
 pnpm typecheck
-pnpm test
+pnpm test:coverage
 pnpm build
+pnpm test:e2e
+pnpm release:package
 ```
 
 Real integration checks:
@@ -353,11 +338,22 @@ Real integration checks:
 ```bash
 RUN_REAL_INTEGRATION=1 pnpm test:integration
 RUN_CODEX_INTEGRATION=1 pnpm test:codex
-pnpm test:e2e
 ```
 
 The integration checks use real GitHub/Codex commands. They require network access and valid local authentication.
 
-## Final Process Report
+## Contributing
 
-Every completed run writes `KAKASHI_REPORT.md` into the generated project. It includes the original requirement, parsed capabilities, every GitHub repository analyzed, each repository's purpose and detected stack, selected main/auxiliary sources, capability matches, source areas prepared for Codex reference, Codex iteration summaries, verifier attempts, repair-loop status, and exported artifacts.
+Issues and pull requests are welcome. Recommended flow:
+
+1. Fork the repository and create a feature branch.
+2. Run `pnpm install`.
+3. Change code or documentation.
+4. Run `pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build`.
+5. Open a pull request and mention whether real GitHub/Codex integration tests were run.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details. See [SECURITY.md](SECURITY.md) for security reporting guidance.
+
+## License
+
+Kakashi is released under the [MIT License](LICENSE).

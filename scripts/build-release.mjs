@@ -45,6 +45,8 @@ for (const target of targets) {
   await cp(join(rootDir, "README.md"), join(packageDir, "README.md"));
   await cp(join(rootDir, "README-en.md"), join(packageDir, "README-en.md"));
   await cp(join(rootDir, "LICENSE"), join(packageDir, "LICENSE"));
+  await cp(join(rootDir, "CONTRIBUTING.md"), join(packageDir, "CONTRIBUTING.md"));
+  await cp(join(rootDir, "SECURITY.md"), join(packageDir, "SECURITY.md"));
 
   const webDist = join(rootDir, "apps", "web", "dist");
   if (existsSync(webDist)) {

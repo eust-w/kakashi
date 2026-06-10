@@ -1,8 +1,27 @@
 {
   "name": "kakashi",
   "version": "0.2.0",
+  "description": "Codex-powered GitHub multi-repository capability fusion system.",
   "private": true,
   "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/eust-w/kakashi#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eust-w/kakashi.git"
+  },
+  "bugs": {
+    "url": "https://github.com/eust-w/kakashi/issues"
+  },
+  "keywords": [
+    "codex",
+    "github",
+    "ai-agent",
+    "cli",
+    "capability-graph",
+    "code-generation",
+    "repository-analysis"
+  ],
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build": "pnpm -r build",

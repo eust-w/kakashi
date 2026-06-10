@@ -88,9 +88,9 @@ jobs:
 
           English: The single-file executables embed the Kakashi Web UI and the Node.js runtime needed to start Kakashi. Git, GitHub CLI authentication, and Codex CLI are still required for real Kakashi runs.
 
-          本版本也包含归档包，适合需要 README.md、README-en.md、INSTALL.md、wrapper scripts 和 Web UI 文件目录的用户。归档包运行时需要 Node.js 24+。
+          本版本也包含归档包，适合需要 README.md、README-en.md、INSTALL.md、LICENSE、CONTRIBUTING.md、SECURITY.md、wrapper scripts 和 Web UI 文件目录的用户。归档包运行时需要 Node.js 24+。
 
-          English: Archive packages are also included for users who prefer an unpacked directory with README.md, README-en.md, INSTALL.md, wrapper scripts, and Web UI files. Archives require Node.js 24+ at runtime.
+          English: Archive packages are also included for users who prefer an unpacked directory with README.md, README-en.md, INSTALL.md, LICENSE, CONTRIBUTING.md, SECURITY.md, wrapper scripts, and Web UI files. Archives require Node.js 24+ at runtime.
 
           CLI 和 Web UI 用法请查看仓库 README.md / README-en.md，以及每个归档包内的 INSTALL.md。
 
