@@ -1,5 +1,5 @@
-import { mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { RunStore } from "./run-store";
@@ -61,5 +61,29 @@ describe("RunStore", () => {
     await store.appendEvent(state.runId, "failed", "error", "Late failure event");
 
     await expect(store.load(state.runId)).resolves.toMatchObject({ stage: "completed" });
+  });
+
+  it("rejects run ids that would escape the run store directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "kakashi-runs-"));
+    const store = new RunStore(root);
+    const externalStatePath = join(root, "..", "outside-run", "state.json");
+    await mkdir(dirname(externalStatePath), { recursive: true });
+    await writeFile(
+      externalStatePath,
+      JSON.stringify({
+        runId: "outside-run",
+        mode: "auto",
+        stage: "completed",
+        requirementText: "outside",
+        outputDir: root,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }),
+      "utf8"
+    );
+
+    await expect(store.load("../outside-run")).rejects.toThrow(/Invalid run id/);
+    await expect(store.events("../outside-run")).rejects.toThrow(/Invalid run id/);
+    await expect(store.appendEvent("../outside-run", "searching", "info", "outside")).rejects.toThrow(/Invalid run id/);
   });
 });

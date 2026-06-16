@@ -67,7 +67,7 @@ export class RunStore {
       message,
       data: data === undefined ? undefined : redactObject(data)
     };
-    await ensureDir(join(this.rootDir, runId));
+    await ensureDir(this.runDir(runId));
     await appendFile(this.eventsPath(runId), `${JSON.stringify(event)}\n`, "utf8");
     await this.syncStageFromEvent(runId, stage);
     return event;
@@ -83,11 +83,11 @@ export class RunStore {
   }
 
   private statePath(runId: string): string {
-    return join(this.rootDir, runId, "state.json");
+    return join(this.runDir(runId), "state.json");
   }
 
   private eventsPath(runId: string): string {
-    return join(this.rootDir, runId, "events.jsonl");
+    return join(this.runDir(runId), "events.jsonl");
   }
 
   private async syncStageFromEvent(runId: string, stage: RunStage): Promise<void> {
@@ -95,8 +95,19 @@ export class RunStore {
     if (!state || state.stage === stage || isTerminalStage(state.stage)) return;
     await this.save({ ...state, stage });
   }
+
+  private runDir(runId: string): string {
+    return join(this.rootDir, validateRunId(runId));
+  }
 }
 
 function isTerminalStage(stage: RunStage): boolean {
   return stage === "completed" || stage === "failed" || stage === "cancelled";
+}
+
+function validateRunId(runId: string): string {
+  if (!/^[A-Za-z0-9_-]+$/.test(runId)) {
+    throw new Error("Invalid run id.");
+  }
+  return runId;
 }
