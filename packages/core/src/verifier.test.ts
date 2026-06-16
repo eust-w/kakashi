@@ -138,7 +138,7 @@ describe("Verifier", () => {
       "utf8"
     );
 
-    const result = await new Verifier().verify(dir, 2_000);
+    const result = await new Verifier().verify(dir, 750);
 
     expect(result.ok).toBe(false);
     expect(result.summary).toBe("Verification failed at npm start readiness.");
