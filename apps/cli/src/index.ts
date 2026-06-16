@@ -116,11 +116,11 @@ program
   .description("Inspect a previous run.")
   .argument("<runId>", "Run id.")
   .option("--json", "Print machine-readable JSON. This is the default for inspect.")
-  .action(async (runId: string, options: JsonOptions) => {
+  .action(async (runId: string) => {
     const orchestrator = new KakashiOrchestrator({ workDir: process.cwd() });
     const state = await orchestrator.store.load(runId);
     if (!state) {
-      printError(`Run not found: ${runId}`, options);
+      printError(`Run not found: ${runId}`, { json: true });
       process.exitCode = 1;
       return;
     }

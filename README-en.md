@@ -232,8 +232,11 @@ Machine-readable output is available for CI, scripts, and external orchestrators
 kakashi run "Build a local analytics CLI" --out ./generated-cli --json
 kakashi doctor --json
 kakashi runs --json --limit 5
+kakashi inspect <runId>
 kakashi events <runId> --json
 ```
+
+`inspect` prints JSON by default; missing run records also write structured errors to stderr.
 
 Common options:
 

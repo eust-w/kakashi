@@ -54,6 +54,16 @@ describe("kakashi CLI run inspection commands", () => {
     expect(JSON.parse(result.stderr)).toEqual({ error: "Run not found: missing-run" });
   });
 
+  it("prints structured JSON errors for missing inspect targets by default", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "kakashi-cli-"));
+
+    const result = await runCli(["inspect", "missing-run"], cwd);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(JSON.parse(result.stderr)).toEqual({ error: "Run not found: missing-run" });
+  });
+
   it("rejects invalid auto-run numeric options before external authentication", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "kakashi-cli-"));
 

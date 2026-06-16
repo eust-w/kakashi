@@ -232,8 +232,11 @@ kakashi events <runId>
 kakashi run "Build a local analytics CLI" --out ./generated-cli --json
 kakashi doctor --json
 kakashi runs --json --limit 5
+kakashi inspect <runId>
 kakashi events <runId> --json
 ```
+
+`inspect` 默认输出 JSON；找不到运行记录时也会把结构化错误写到 stderr。
 
 常用参数：
 
