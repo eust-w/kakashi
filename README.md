@@ -18,7 +18,7 @@ Kakashi（复制忍者）是在 Codex CLI / Codex Desktop 之上构建的 GitHub
 - 真实 GitHub 搜索：通过 Octokit 搜索公开或有权限的仓库，网络抖动时会 fallback 到 `gh api`。
 - 可解释仓库选择：候选仓库会记录评分拆解和选择原因，最终报告会说明为什么选它。
 - 真实 Codex 改造：调用本机 `codex exec`，不使用模拟成功路径。
-- 真实验证闭环：自动运行 install、lint、build、test、CLI help 或 server readiness；服务日志暴露本地 URL 时会发起真实 HTTP 探测，并在失败时进入修复回环。
+- 真实验证闭环：自动运行 install、lint、build、test、CLI help 或 server readiness；服务日志暴露本地 URL 时会发起真实 HTTP 探测，并回退检查常见健康端点。
 - 可中止执行：CLI/Web 后台命令支持取消信号，会终止 git、Codex 和 verifier 子进程。
 - 本地 Web UI：支持自动/交互模式、仓库数量、修复轮数、copyleft 策略、覆盖输出和取消运行。
 - 来源与许可证追踪：生成 `SOURCE_PROVENANCE.json`、`KAKASHI_REPORT.md` 和来源仓库许可证副本。
@@ -55,7 +55,7 @@ flowchart LR
 - Fusion Planner：选择主项目和辅助项目，生成融合计划。
 - Codex Executor：调用本机 `codex exec` 执行真实代码修改。
 - Gap Detector：根据验证失败日志发现缺失能力，并继续搜索 GitHub。
-- Verifier：自动检测并运行 install、build、test、lint、start 等命令；server readiness 会在可识别本地 URL 时验证 HTTP 2xx/3xx 响应。
+- Verifier：自动检测并运行 install、build、test、lint、start 等命令；server readiness 会在可识别本地 URL 时验证 HTTP 2xx/3xx 响应，并尝试 `/health`、`/api/health`、`/ready`、`/readiness`。
 - Exporter：输出新项目、README、运行命令、验证报告和来源追踪。
 
 ## 快速开始

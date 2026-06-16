@@ -113,20 +113,16 @@ describe("Verifier", () => {
   it("fails readiness when a server logs ready but does not serve healthy HTTP", async () => {
     const dir = join(tmpdir(), `kakashi-verifier-${randomUUID()}`);
     const port = await getOpenPort();
-    await mkdir(join(dir, "local-express"), { recursive: true });
+    await mkdir(dir, { recursive: true });
     await writeFile(
       join(dir, "package.json"),
       JSON.stringify({
         scripts: {
           start: "node server.mjs"
-        },
-        dependencies: {
-          express: "file:./local-express"
         }
       }),
       "utf8"
     );
-    await writeFile(join(dir, "local-express", "package.json"), JSON.stringify({ name: "express", version: "0.0.0" }), "utf8");
     await writeFile(
       join(dir, "server.mjs"),
       [
@@ -151,20 +147,16 @@ describe("Verifier", () => {
   it("confirms server readiness by probing the logged local HTTP URL", async () => {
     const dir = join(tmpdir(), `kakashi-verifier-${randomUUID()}`);
     const port = await getOpenPort();
-    await mkdir(join(dir, "local-express"), { recursive: true });
+    await mkdir(dir, { recursive: true });
     await writeFile(
       join(dir, "package.json"),
       JSON.stringify({
         scripts: {
           start: "node server.mjs"
-        },
-        dependencies: {
-          express: "file:./local-express"
         }
       }),
       "utf8"
     );
-    await writeFile(join(dir, "local-express", "package.json"), JSON.stringify({ name: "express", version: "0.0.0" }), "utf8");
     await writeFile(
       join(dir, "server.mjs"),
       [
@@ -187,6 +179,47 @@ describe("Verifier", () => {
     expect(result.ok).toBe(true);
     expect(result.steps.find((step) => step.name === "npm start readiness")?.result.ready).toBe(true);
     await expect(readFile(join(dir, "readiness-probe.txt"), "utf8")).resolves.toBe("/");
+  });
+
+  it("accepts API server readiness when the base URL is 404 but a health endpoint is healthy", async () => {
+    const dir = join(tmpdir(), `kakashi-verifier-${randomUUID()}`);
+    const port = await getOpenPort();
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({
+        scripts: {
+          start: "node server.mjs"
+        }
+      }),
+      "utf8"
+    );
+    await writeFile(
+      join(dir, "server.mjs"),
+      [
+        "import { appendFileSync } from 'node:fs';",
+        "import { createServer } from 'node:http';",
+        `const port = ${port};`,
+        "createServer((req, res) => {",
+        "  appendFileSync('readiness-probes.txt', `${req.url}\\n`);",
+        "  if (req.url === '/health') {",
+        "    res.writeHead(200, { 'content-type': 'application/json' });",
+        "    res.end('{\"ok\":true}');",
+        "    return;",
+        "  }",
+        "  res.writeHead(404, { 'content-type': 'text/plain' });",
+        "  res.end('not found');",
+        "}).listen(port, '127.0.0.1', () => {",
+        "  console.log(`listening on http://127.0.0.1:${port}`);",
+        "});"
+      ].join("\n"),
+      "utf8"
+    );
+
+    const result = await new Verifier().verify(dir, 5_000);
+
+    expect(result.ok).toBe(true);
+    await expect(readFile(join(dir, "readiness-probes.txt"), "utf8")).resolves.toContain("/health");
   });
 
   it("detects Node server scripts without treating watch/build scripts as runnable", async () => {

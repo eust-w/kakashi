@@ -149,7 +149,9 @@ async function verifyLocalHttpReadiness(output: string): Promise<boolean> {
   const urls = extractLocalReadinessUrls(output);
   if (urls.length === 0) return true;
   for (const url of urls) {
-    if (await isHealthyHttpUrl(url)) return true;
+    for (const candidate of readinessProbeUrls(url)) {
+      if (await isHealthyHttpUrl(candidate)) return true;
+    }
   }
   return false;
 }
@@ -169,6 +171,17 @@ function extractLocalReadinessUrls(output: string): URL[] {
     }
   }
   return urls;
+}
+
+function readinessProbeUrls(url: URL): URL[] {
+  const seen = new Set<string>();
+  const candidates = [url, ...["/health", "/api/health", "/ready", "/readiness"].map((path) => new URL(path, url.origin))];
+  return candidates.filter((candidate) => {
+    const key = candidate.href;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function isLocalHost(hostname: string): boolean {
@@ -255,7 +268,7 @@ function isServerScript(script: string | undefined, pkg: PackageJson): boolean {
   if (/\b(vite|next\s+(dev|start)|nuxt|astro\s+dev|remix-serve|webpack\s+serve|react-scripts\s+start)\b/.test(text)) {
     return true;
   }
-  if (/\b(node|tsx|ts-node)\b.*\b(server|app)\b/.test(text) && hasServerDependency(pkg)) return true;
+  if (/\b(node|tsx|ts-node)\b.*\b(server|app|api)\b/.test(text)) return true;
   return /\bserve\b/.test(text) && hasServerDependency(pkg);
 }
 
