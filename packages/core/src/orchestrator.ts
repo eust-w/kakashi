@@ -222,9 +222,19 @@ export class KakashiOrchestrator {
     const analyses: RepoAnalysis[] = [];
     for (const candidate of candidates) {
       this.throwIfCancelled();
-      const localPath = await (await this.getRepoManager()).cloneToCache(candidate, opts.cacheDir, opts.commandTimeoutMs, opts.signal);
-      analyses.push(await (await this.getAnalyzer()).analyze(candidate, localPath, spec.capabilities));
-      await this.emit(state, "analyzing", "info", `Analyzed ${candidate.fullName}.`);
+      try {
+        const localPath = await (await this.getRepoManager()).cloneToCache(candidate, opts.cacheDir, opts.commandTimeoutMs, opts.signal);
+        analyses.push(await (await this.getAnalyzer()).analyze(candidate, localPath, spec.capabilities));
+        await this.emit(state, "analyzing", "info", `Analyzed ${candidate.fullName}.`);
+      } catch (error) {
+        this.throwIfCancelled();
+        const message = error instanceof Error ? error.message : String(error);
+        await this.emit(state, "analyzing", "warn", `Skipped ${candidate.fullName}: ${message}`, errorDetails(error));
+      }
+    }
+
+    if (analyses.length === 0) {
+      throw new KakashiError("NO_REPOS_ANALYZED", "No repository candidates could be cloned and analyzed.");
     }
 
     const graph = (await this.getGraphBuilder()).build(spec.capabilities, analyses);
@@ -422,6 +432,10 @@ export class KakashiOrchestrator {
     }
     return this.services.exporter;
   }
+}
+
+function errorDetails(error: unknown): unknown {
+  return error instanceof KakashiError ? error.details : undefined;
 }
 
 function codexFailureVerification(codexResult: CodexResult): VerificationResult {

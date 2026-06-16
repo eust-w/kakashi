@@ -17,6 +17,7 @@ Kakashi（复制忍者）是在 Codex CLI / Codex Desktop 之上构建的 GitHub
 
 - 真实 GitHub 搜索：通过 Octokit 搜索公开或有权限的仓库，网络抖动时会 fallback 到 `gh api`。
 - 可解释仓库选择：候选仓库会记录评分拆解和选择原因，最终报告会说明为什么选它。
+- 候选仓库容错：单个候选仓库 clone 或分析失败时会记录 warn 事件并继续处理其它真实候选；只有全部候选失败才终止。
 - 真实 Codex 改造：调用本机 `codex exec`，不使用模拟成功路径。
 - 真实验证闭环：自动运行 install、lint、build、test、CLI help 或 server readiness；服务日志暴露本地 URL 时会发起真实 HTTP 探测，并回退检查常见健康端点。
 - 可中止执行：CLI/Web 后台命令支持取消信号，会终止 git、Codex 和 verifier 子进程。

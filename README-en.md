@@ -17,6 +17,7 @@ Describe the software you want in one sentence. Kakashi searches real GitHub rep
 
 - Real GitHub search: searches public or authorized repositories through Octokit, with `gh api` fallback for transient network failures.
 - Explainable repository selection: candidates carry score breakdowns and selection reasons, and the final report explains why sources were chosen.
+- Candidate fault tolerance: if one candidate repository cannot be cloned or analyzed, Kakashi records a warn event and continues with other real candidates; it fails only when every candidate fails.
 - Real Codex modification: runs local `codex exec` instead of simulated success paths.
 - Real verification loop: runs install, lint, build, test, CLI help, or server readiness checks; when server output exposes a local URL, Kakashi performs a real HTTP probe and falls back to common health endpoints.
 - Cancellable execution: CLI/Web background commands accept cancellation and terminate git, Codex, and verifier subprocesses.

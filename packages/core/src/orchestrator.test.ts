@@ -19,6 +19,71 @@ afterEach(() => {
 });
 
 describe("KakashiOrchestrator", () => {
+  it("skips a repository candidate that cannot be cloned and continues with remaining real candidates", async () => {
+    const root = await mkdtemp(join(tmpdir(), "kakashi-orchestrator-"));
+    const validRemote = await createVerifiableRemote(root);
+    const badCandidate = makeCandidate(validRemote);
+    const goodCandidate = {
+      ...makeCandidate(validRemote),
+      id: 2,
+      fullName: "local/good-source",
+      name: "good-source"
+    };
+    badCandidate.fullName = "local/broken-source";
+    badCandidate.name = "broken-source";
+    badCandidate.defaultBranch = "missing-branch";
+
+    const orchestrator = new KakashiOrchestrator({
+      workDir: root,
+      outputDir: join(root, "output"),
+      cacheDir: join(root, "cache"),
+      commandTimeoutMs: 30_000,
+      services: {
+        searcher: {
+          search: async () => [badCandidate, goodCandidate]
+        }
+      }
+    });
+
+    const prepared = await orchestrator.prepare("Build a TypeScript CLI with tests", "interactive");
+
+    expect(prepared.analyses.map((analysis) => analysis.candidate.fullName)).toEqual([goodCandidate.fullName]);
+    expect(prepared.plan.main.repo.fullName).toBe(goodCandidate.fullName);
+    const events = await orchestrator.store.events(prepared.state.runId);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warn",
+          message: expect.stringContaining("Skipped local/broken-source")
+        })
+      ])
+    );
+  });
+
+  it("fails explicitly when no repository candidate can be cloned and analyzed", async () => {
+    const root = await mkdtemp(join(tmpdir(), "kakashi-orchestrator-"));
+    const validRemote = await createVerifiableRemote(root);
+    const badCandidate = makeCandidate(validRemote);
+    badCandidate.fullName = "local/broken-source";
+    badCandidate.name = "broken-source";
+    badCandidate.defaultBranch = "missing-branch";
+    const orchestrator = new KakashiOrchestrator({
+      workDir: root,
+      outputDir: join(root, "output"),
+      cacheDir: join(root, "cache"),
+      commandTimeoutMs: 30_000,
+      services: {
+        searcher: {
+          search: async () => [badCandidate]
+        }
+      }
+    });
+
+    await expect(orchestrator.prepare("Build a TypeScript CLI with tests", "interactive")).rejects.toMatchObject({
+      code: "NO_REPOS_ANALYZED"
+    });
+  });
+
   it("fails the run when Codex exits non-zero even if the cloned project verifies", async () => {
     const root = await mkdtemp(join(tmpdir(), "kakashi-orchestrator-"));
     const remote = await createVerifiableRemote(root);
