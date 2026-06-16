@@ -4,12 +4,15 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createServer } from "node:net";
-import { createRequire } from "node:module";
 import type { AddressInfo } from "node:net";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { resolveOutputDirInsideWorkDir } from "./output-path";
 
-const require = createRequire(import.meta.url);
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const tsxBin = join(repoRoot, "node_modules", ".bin", "tsx");
+const serverEntry = join(repoRoot, "apps", "server", "src", "index.ts");
+const tsconfig = join(repoRoot, "tsconfig.base.json");
 
 describe("resolveOutputDirInsideWorkDir", () => {
   it("keeps relative output directories inside the work directory", async () => {
@@ -72,8 +75,7 @@ describe("server run lifecycle", () => {
 
 async function withRunningServer(workDir: string, run: (baseUrl: string) => Promise<void>): Promise<void> {
   const port = await getOpenPort();
-  const tsxCli = join(dirname(require.resolve("tsx/package.json")), "dist", "cli.mjs");
-  const child = spawn(process.execPath, [tsxCli, resolve("apps/server/src/index.ts"), `--port=${port}`], {
+  const child = spawn(tsxBin, ["--tsconfig", tsconfig, serverEntry, `--port=${port}`], {
     cwd: workDir,
     env: { ...process.env, KAKASHI_WEB_DIST: "" }
   });
