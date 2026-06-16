@@ -34,6 +34,15 @@ describe("RunStore", () => {
     expect(listed[0]?.mode).toBe("interactive");
   });
 
+  it("ignores non-run directories when listing persisted runs", async () => {
+    const root = await mkdtemp(join(tmpdir(), "kakashi-runs-"));
+    const store = new RunStore(root);
+    const state = await store.create("auto", "valid run", join(root, "out"));
+    await mkdir(join(root, "manual notes"), { recursive: true });
+
+    await expect(store.list()).resolves.toMatchObject([{ runId: state.runId }]);
+  });
+
   it("redacts event data before writing JSONL", async () => {
     const root = await mkdtemp(join(tmpdir(), "kakashi-runs-"));
     const store = new RunStore(root);

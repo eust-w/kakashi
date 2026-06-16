@@ -44,6 +44,7 @@ export class RunStore {
     const states = await Promise.all(
       entries
         .filter((entry) => entry.isDirectory())
+        .filter((entry) => isValidRunId(entry.name))
         .map((entry) => this.load(entry.name))
     );
     return states
@@ -106,8 +107,12 @@ function isTerminalStage(stage: RunStage): boolean {
 }
 
 function validateRunId(runId: string): string {
-  if (!/^[A-Za-z0-9_-]+$/.test(runId)) {
+  if (!isValidRunId(runId)) {
     throw new Error("Invalid run id.");
   }
   return runId;
+}
+
+function isValidRunId(runId: string): boolean {
+  return /^[A-Za-z0-9_-]+$/.test(runId);
 }
