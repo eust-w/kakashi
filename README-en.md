@@ -385,7 +385,7 @@ Issues and pull requests are welcome. Recommended flow:
 4. Run `pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build`.
 5. Open a pull request and mention whether real GitHub/Codex integration tests were run.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for details. See [SECURITY.md](SECURITY.md) for security reporting guidance.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details. See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for conduct expectations, [SUPPORT.md](SUPPORT.md) for support boundaries, and [SECURITY.md](SECURITY.md) for security reporting guidance. Use the templates under `.github/` for bugs, feature requests, and pull requests.
 
 ## License
 

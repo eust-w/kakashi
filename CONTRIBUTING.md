@@ -4,6 +4,8 @@ Language: 简体中文 | English
 
 Kakashi is open source under the MIT License. Issues, documentation fixes, tests, and pull requests are welcome.
 
+请先阅读 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)、[SUPPORT.md](SUPPORT.md) 和 [SECURITY.md](SECURITY.md)。Bug、功能请求和 PR 请使用 `.github/` 中的模板。
+
 ## 开发流程
 
 1. Fork 仓库并创建分支。
@@ -42,5 +44,7 @@ RUN_CODEX_INTEGRATION=1 pnpm test:codex
 ## English
 
 Use Node.js 24+ and pnpm 10+. Run `pnpm lint`, `pnpm typecheck`, `pnpm test:coverage`, and `pnpm build` before opening a pull request. Run `pnpm test:e2e` for Web UI changes. For GitHub search, Codex execution, or verifier-loop changes, mention whether you ran the real integration tests.
+
+Read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SUPPORT.md](SUPPORT.md), and [SECURITY.md](SECURITY.md) before contributing. Use the templates under `.github/` for bugs, feature requests, and pull requests.
 
 Never commit API keys, GitHub tokens, Codex access tokens, secret-bearing logs, or private generated project files. Core GitHub, Codex, and verifier behavior should not be replaced with mocks, simulations, or hardcoded success paths.

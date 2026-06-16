@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/eust-w/kakashi/security/policy
+    about: Report vulnerabilities, leaked credentials, or sensitive-data issues privately.
+  - name: Documentation
+    url: https://github.com/eust-w/kakashi#readme
+    about: Read the setup, CLI, Web UI, and release documentation before opening an issue.

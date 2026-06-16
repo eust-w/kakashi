@@ -385,7 +385,7 @@ RUN_CODEX_INTEGRATION=1 pnpm test:codex
 4. 运行 `pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build`。
 5. 提交 PR，并说明是否跑过真实 GitHub/Codex 集成测试。
 
-更多细节见 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题见 [SECURITY.md](SECURITY.md)。
+更多细节见 [CONTRIBUTING.md](CONTRIBUTING.md)。行为准则见 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)，支持边界见 [SUPPORT.md](SUPPORT.md)，安全问题见 [SECURITY.md](SECURITY.md)。Bug、功能请求和 PR 请使用 `.github/` 中的模板。
 
 ## 项目许可证
 
