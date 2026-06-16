@@ -51,9 +51,9 @@ describe("open-source project health", () => {
   it("executes built release CLI assets before publishing them", async () => {
     const release = await readFile(".github/workflows/release.yml", "utf8");
 
+    expect(packageJson.scripts).toHaveProperty("verify:release-assets", "node scripts/verify-release-assets.mjs");
+    await expect(pathExists("scripts/verify-release-assets.mjs")).resolves.toBe(true);
     expect(release).toContain("Verify built CLI assets");
-    expect(release).toContain("$GITHUB_WORKSPACE/dist/release/.bundle/kakashi.mjs");
-    expect(release).toContain("$GITHUB_WORKSPACE/dist/executables/kakashi-v${VERSION}-${HOST_TARGET}");
-    expect(release.match(/runs --json/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(release).toContain("pnpm verify:release-assets");
   });
 });

@@ -70,12 +70,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
         run: |
-          VERSION="${RELEASE_VERSION#v}"
-          HOST_TARGET="darwin-$(node -p "process.arch")"
-          VERIFY_DIR="$(mktemp -d)"
-          cd "$VERIFY_DIR"
-          node "$GITHUB_WORKSPACE/dist/release/.bundle/kakashi.mjs" runs --json
-          "$GITHUB_WORKSPACE/dist/executables/kakashi-v${VERSION}-${HOST_TARGET}" runs --json
+          pnpm verify:release-assets
 
       - name: Stage release upload assets
         run: |

@@ -38,6 +38,7 @@
     "test:e2e": "playwright test",
     "release:package": "node scripts/build-release.mjs",
     "release:executable": "node scripts/build-executable.mjs",
+    "verify:release-assets": "node scripts/verify-release-assets.mjs",
     "kakashi": "node apps/cli/dist/index.js",
     "doctor": "node apps/cli/dist/index.js doctor"
   },
