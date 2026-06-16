@@ -9,7 +9,8 @@ import {
   Doctor,
   FusionPlanner,
   KakashiOrchestrator,
-  type KakashiOptions,
+  type KakashiRunState,
+  type OrchestratorOptions,
   type RunEvent
 } from "@kakashi/core";
 
@@ -23,8 +24,13 @@ program
 program
   .command("doctor")
   .description("Check local Kakashi prerequisites.")
-  .action(async () => {
+  .option("--json", "Print machine-readable JSON.")
+  .action(async (options: JsonOptions) => {
     const checks = await new Doctor().run(process.cwd());
+    if (options.json) {
+      printJson(checks);
+      return;
+    }
     for (const check of checks) {
       console.log(`${check.ok ? pc.green("PASS") : pc.red("FAIL")} ${check.name}: ${check.detail}`);
     }
@@ -41,10 +47,11 @@ program
   .option("--allow-copyleft", "Allow copyleft-licensed repositories.")
   .option("--force", "Clear the output directory before materializing the main repo.")
   .option("--model <model>", "Codex model override.")
+  .option("--json", "Print final run state as JSON and suppress progress logs.")
   .action(async (requirement: string, options: CliOptions) => {
     const orchestrator = createOrchestrator(options);
     const state = await orchestrator.run(requirement, "auto");
-    printFinalState(state);
+    printFinalState(state, options);
   });
 
 program
@@ -86,7 +93,7 @@ program
     }
 
     const state = await orchestrator.executePrepared(prepared.state, plan);
-    printFinalState(state);
+    printFinalState(state, options);
   });
 
 program
@@ -107,6 +114,7 @@ program
   .command("inspect")
   .description("Inspect a previous run.")
   .argument("<runId>", "Run id.")
+  .option("--json", "Print machine-readable JSON. This is the default for inspect.")
   .action(async (runId: string) => {
     const orchestrator = new KakashiOrchestrator({ workDir: process.cwd() });
     const state = await orchestrator.store.load(runId);
@@ -116,6 +124,43 @@ program
       return;
     }
     console.log(JSON.stringify(state, null, 2));
+  });
+
+program
+  .command("runs")
+  .description("List previous Kakashi runs from the current workspace.")
+  .option("--json", "Print machine-readable JSON.")
+  .option("--limit <number>", "Maximum number of runs to print.", "20")
+  .action(async (options: RunListOptions) => {
+    const orchestrator = new KakashiOrchestrator({ workDir: process.cwd() });
+    const limit = parsePositiveInteger(options.limit, "limit");
+    const runs = (await orchestrator.store.list()).slice(0, limit);
+    if (options.json) {
+      printJson(runs);
+      return;
+    }
+    printRunList(runs);
+  });
+
+program
+  .command("events")
+  .description("Print the append-only event log for a previous run.")
+  .argument("<runId>", "Run id.")
+  .option("--json", "Print machine-readable JSON.")
+  .action(async (runId: string, options: JsonOptions) => {
+    const orchestrator = new KakashiOrchestrator({ workDir: process.cwd() });
+    const state = await orchestrator.store.load(runId);
+    if (!state) {
+      console.error(pc.red(`Run not found: ${runId}`));
+      process.exitCode = 1;
+      return;
+    }
+    const events = await orchestrator.store.events(runId);
+    if (options.json) {
+      printJson(events);
+      return;
+    }
+    printEventLog(events);
   });
 
 program.parseAsync().catch((error: unknown) => {
@@ -130,10 +175,19 @@ interface CliOptions {
   allowCopyleft?: boolean;
   force?: boolean;
   model?: string;
+  json?: boolean;
+}
+
+interface JsonOptions {
+  json?: boolean;
+}
+
+interface RunListOptions extends JsonOptions {
+  limit: string;
 }
 
 function createOrchestrator(options: CliOptions): KakashiOrchestrator {
-  return new KakashiOrchestrator({
+  const orchestratorOptions: OrchestratorOptions = {
     workDir: process.cwd(),
     outputDir: options.out,
     maxRepos: Number(options.maxRepos),
@@ -141,8 +195,9 @@ function createOrchestrator(options: CliOptions): KakashiOrchestrator {
     allowCopyleft: Boolean(options.allowCopyleft),
     force: Boolean(options.force),
     codexModel: options.model,
-    onEvent: printEvent
-  } satisfies Partial<KakashiOptions> & { onEvent: (event: RunEvent) => void });
+    onEvent: options.json ? undefined : printEvent
+  };
+  return new KakashiOrchestrator(orchestratorOptions);
 }
 
 function printEvent(event: RunEvent): void {
@@ -157,7 +212,15 @@ function printPlan(plan: { main: { repo: { fullName: string } }; auxiliaries: Ar
   for (const task of plan.tasks) console.log(`- ${task.title}`);
 }
 
-function printFinalState(state: { stage: string; outputDir: string; error?: string; report?: { verification: { summary: string } } }): void {
+function printFinalState(
+  state: { stage: string; outputDir: string; error?: string; report?: { verification: { summary: string } } },
+  options: JsonOptions
+): void {
+  if (options.json) {
+    printJson(state);
+    if (state.stage !== "completed") process.exitCode = 1;
+    return;
+  }
   if (state.stage === "completed") {
     console.log(pc.green(`Completed: ${state.outputDir}`));
     console.log(state.report?.verification.summary);
@@ -165,4 +228,50 @@ function printFinalState(state: { stage: string; outputDir: string; error?: stri
   }
   console.error(pc.red(`Failed: ${state.error ?? state.stage}`));
   process.exitCode = 1;
+}
+
+function printRunList(runs: KakashiRunState[]): void {
+  if (runs.length === 0) {
+    console.log(pc.dim("No Kakashi runs found in this workspace."));
+    return;
+  }
+  for (const run of runs) {
+    console.log(
+      [
+        run.runId,
+        run.stage.padEnd(24),
+        run.mode.padEnd(11),
+        run.updatedAt,
+        truncate(run.requirementText, 80)
+      ].join("  ")
+    );
+  }
+}
+
+function printEventLog(events: RunEvent[]): void {
+  if (events.length === 0) {
+    console.log(pc.dim("No events recorded for this run."));
+    return;
+  }
+  for (const event of events) {
+    const level = event.level.toUpperCase().padEnd(5);
+    console.log(`${event.timestamp}  ${level}  ${event.stage.padEnd(24)}  ${event.message}`);
+  }
+}
+
+function printJson(value: unknown): void {
+  console.log(JSON.stringify(value, null, 2));
+}
+
+function parsePositiveInteger(value: string, name: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+  return parsed;
+}
+
+function truncate(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 3)}...`;
 }

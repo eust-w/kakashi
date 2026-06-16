@@ -221,7 +221,18 @@ kakashi interactive \
 查看历史运行：
 
 ```bash
+kakashi runs
 kakashi inspect <runId>
+kakashi events <runId>
+```
+
+机器可读输出适合接入 CI、脚本或外部编排器：
+
+```bash
+kakashi run "Build a local analytics CLI" --out ./generated-cli --json
+kakashi doctor --json
+kakashi runs --json --limit 5
+kakashi events <runId> --json
 ```
 
 常用参数：
@@ -232,6 +243,7 @@ kakashi inspect <runId>
 - `--model <name>`：指定 Codex 模型。
 - `--allow-copyleft`：允许 copyleft 许可证仓库进入候选。
 - `--force`：允许覆盖目标输出目录。
+- `--json`：在支持的命令中输出干净 JSON，避免进度日志污染 stdout。
 
 ## Web UI
 

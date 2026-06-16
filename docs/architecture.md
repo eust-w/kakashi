@@ -23,6 +23,13 @@ Run state is stored under `.kakashi/runs/<runId>`:
 - `state.json` contains the latest run state.
 - `events.jsonl` is append-only and powers CLI/Web progress logs.
 
+CLI inspection commands read this store directly:
+
+- `kakashi runs` lists recent runs for the current workspace.
+- `kakashi inspect <runId>` prints the latest run state.
+- `kakashi events <runId>` prints the append-only event log.
+- `--json` on supported commands produces clean machine-readable output for scripts and CI.
+
 Generated projects contain:
 
 - `.kakashi/fusion-plan.json`

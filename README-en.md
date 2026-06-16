@@ -221,7 +221,18 @@ kakashi interactive \
 Inspect a previous run:
 
 ```bash
+kakashi runs
 kakashi inspect <runId>
+kakashi events <runId>
+```
+
+Machine-readable output is available for CI, scripts, and external orchestrators:
+
+```bash
+kakashi run "Build a local analytics CLI" --out ./generated-cli --json
+kakashi doctor --json
+kakashi runs --json --limit 5
+kakashi events <runId> --json
 ```
 
 Common options:
@@ -232,6 +243,7 @@ Common options:
 - `--model <name>`: Codex model name.
 - `--allow-copyleft`: allow copyleft-licensed repositories as candidates.
 - `--force`: allow overwriting the output directory.
+- `--json`: print clean JSON for supported commands without progress logs on stdout.
 
 ## Web UI
 
