@@ -5,7 +5,14 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
-import { isKakashiError, KakashiOrchestrator, type KakashiRunState, type RunEvent } from "@kakashi/core";
+import {
+  isKakashiError,
+  KakashiOrchestrator,
+  RunStore,
+  type KakashiRunState,
+  type RunEvent,
+  type RunStage
+} from "@kakashi/core";
 import { resolveOutputDirInsideWorkDir } from "./output-path";
 export { resolveOutputDirInsideWorkDir } from "./output-path";
 
@@ -50,7 +57,6 @@ const ConfirmSchema = z.object({
 const running = new Map<string, KakashiOrchestrator>();
 const events = new EventEmitter();
 events.setMaxListeners(1_000);
-const STORE_ONLY_OUTPUT_DIR = ".kakashi/server-output-placeholder";
 
 export function createApp(workDir = process.cwd(), web?: string | WebAssetSource): express.Express {
   const webSource: WebAssetSource = typeof web === "string" ? { webDir: web } : web ?? {};
@@ -64,8 +70,7 @@ export function createApp(workDir = process.cwd(), web?: string | WebAssetSource
 
   app.get("/api/runs", async (_req, res, next) => {
     try {
-      const orchestrator = createOrchestrator(workDir, STORE_ONLY_OUTPUT_DIR, {});
-      res.json(await orchestrator.store.list());
+      res.json(await createRunStore(workDir).list());
     } catch (error) {
       next(error);
     }
@@ -91,8 +96,7 @@ export function createApp(workDir = process.cwd(), web?: string | WebAssetSource
 
   app.get("/api/runs/:id", async (req, res, next) => {
     try {
-      const orchestrator = running.get(req.params.id) ?? createOrchestrator(workDir, STORE_ONLY_OUTPUT_DIR, {});
-      const state = await orchestrator.store.load(req.params.id);
+      const state = await createRunStore(workDir).load(req.params.id);
       if (!state) {
         res.status(404).json({ error: "Run not found" });
         return;
@@ -105,8 +109,7 @@ export function createApp(workDir = process.cwd(), web?: string | WebAssetSource
 
   app.get("/api/runs/:id/events", async (req, res, next) => {
     try {
-      const orchestrator = running.get(req.params.id) ?? createOrchestrator(workDir, STORE_ONLY_OUTPUT_DIR, {});
-      const existing = await orchestrator.store.events(req.params.id);
+      const existing = await createRunStore(workDir).events(req.params.id);
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -141,6 +144,7 @@ export function createApp(workDir = process.cwd(), web?: string | WebAssetSource
         orchestrator.cancel();
         const cancelled: KakashiRunState = { ...state, stage: "cancelled", error: "Cancelled by user." };
         await orchestrator.store.save(cancelled);
+        running.delete(req.params.id);
         res.json(cancelled);
         return;
       }
@@ -153,15 +157,24 @@ export function createApp(workDir = process.cwd(), web?: string | WebAssetSource
 
   app.post("/api/runs/:id/cancel", async (req, res, next) => {
     try {
-      const orchestrator = running.get(req.params.id) ?? createOrchestrator(workDir, STORE_ONLY_OUTPUT_DIR, {});
-      const state = await orchestrator.store.load(req.params.id);
+      const orchestrator = running.get(req.params.id);
+      const store = createRunStore(workDir);
+      const state = await store.load(req.params.id);
       if (!state) {
         res.status(404).json({ error: "Run not found" });
         return;
       }
+      if (isTerminalStage(state.stage)) {
+        res.status(409).json({ error: "Run is already in a terminal stage and cannot be cancelled." });
+        return;
+      }
+      if (!orchestrator) {
+        res.status(409).json({ error: "Run is not active in this server process and cannot be cancelled." });
+        return;
+      }
       const cancelled: KakashiRunState = { ...state, stage: "cancelled", error: "Cancelled by user." };
       orchestrator.cancel();
-      await orchestrator.store.save(cancelled);
+      await store.save(cancelled);
       running.delete(req.params.id);
       res.json(cancelled);
     } catch (error) {
@@ -244,6 +257,14 @@ function createOrchestrator(
     codexModel: options.codexModel,
     onEvent: (event: RunEvent) => events.emit("run-event", event)
   });
+}
+
+function createRunStore(workDir: string): RunStore {
+  return new RunStore(join(resolve(workDir), ".kakashi", "runs"));
+}
+
+function isTerminalStage(stage: RunStage): boolean {
+  return stage === "completed" || stage === "failed" || stage === "cancelled";
 }
 
 function sendSse(res: express.Response, event: RunEvent): void {

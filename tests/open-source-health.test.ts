@@ -33,6 +33,7 @@ describe("open-source project health", () => {
     const release = await readFile(".github/workflows/release.yml", "utf8");
 
     expect(packageJson.scripts).toHaveProperty("audit:high", "pnpm audit --audit-level high");
+    expect(packageJson.devDependencies.esbuild).toMatch(/^\^0\.28\./);
     expect(ci).toContain("pnpm audit:high");
     expect(release).toContain("pnpm audit:high");
   });

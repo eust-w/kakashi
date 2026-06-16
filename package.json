@@ -46,7 +46,7 @@
     "@playwright/test": "^1.57.0",
     "@types/node": "^24.10.1",
     "@vitest/coverage-v8": "^4.0.15",
-    "esbuild": "^0.27.7",
+    "esbuild": "^0.28.1",
     "eslint": "^9.39.1",
     "postject": "1.0.0-alpha.6",
     "tsup": "^8.5.1",
