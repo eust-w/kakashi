@@ -42,7 +42,27 @@ export class Doctor {
       });
     }
 
+    const codexPath = await findExecutable("codex");
+    if (!codexPath) {
+      checks.push({
+        name: "codex-auth",
+        ok: false,
+        detail: "codex was not found on PATH."
+      });
+    } else {
+      const result = await runCommand("codex", ["login", "status"], {
+        cwd,
+        timeoutMs: 10_000
+      });
+      const detail = result.stdout.trim() || result.stderr.trim() || "Run `codex login` or configure Codex authentication.";
+      checks.push({
+        name: "codex-auth",
+        ok: result.exitCode === 0,
+        detail,
+        result
+      });
+    }
+
     return checks;
   }
 }
-

@@ -5,9 +5,8 @@ import pc from "picocolors";
 import { checkbox, confirm } from "@inquirer/prompts";
 import { getEmbeddedWebAssets } from "./runtime-web-assets";
 import {
-  CapabilityGraphBuilder,
+  applyInteractiveSelection,
   Doctor,
-  FusionPlanner,
   KakashiOrchestrator,
   type KakashiRunState,
   type OrchestratorOptions,
@@ -79,11 +78,8 @@ program
       }))
     });
 
-    const analyses = prepared.analyses.filter((analysis) => selected.includes(analysis.candidate.fullName));
-    const graph = new CapabilityGraphBuilder().build(prepared.plan.requirement.capabilities, analyses);
-    const plan = new FusionPlanner().createPlanForRequirement(graph, prepared.plan.requirement, {
-      outputDir: options.out
-    });
+    const selectedState = applyInteractiveSelection(prepared.state, selected);
+    const plan = selectedState.plan!;
 
     printPlan(plan);
     const ok = await confirm({ message: "Execute this fusion plan?", default: true });
@@ -92,7 +88,7 @@ program
       return;
     }
 
-    const state = await orchestrator.executePrepared(prepared.state, plan);
+    const state = await orchestrator.executePrepared(selectedState, plan);
     printFinalState(state, options);
   });
 

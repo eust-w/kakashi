@@ -146,6 +146,10 @@ export GITHUB_TOKEN="github_pat_xxx"
 
 English: Configure Codex:
 
+Kakashi doctor 会执行 \`codex login status\`，确认 Codex 已认证，而不只是命令存在。
+
+English: Kakashi doctor runs \`codex login status\` to confirm Codex is authenticated, not merely installed.
+
 \`\`\`bash
 codex login
 codex login status

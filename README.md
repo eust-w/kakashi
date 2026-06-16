@@ -143,7 +143,7 @@ Kakashi 的读取顺序是：
 
 ### Codex
 
-Kakashi 会调用本机的 `codex exec`，所以需要先让 Codex CLI 能独立运行。
+Kakashi 会调用本机的 `codex exec`，所以需要先让 Codex CLI 能独立运行。`kakashi doctor` 会执行 `codex login status`，用于确认 Codex 不只是安装了命令，也已经完成认证。
 
 使用浏览器或设备登录：
 
@@ -194,6 +194,7 @@ pnpm kakashi doctor
 - `PASS gh`
 - `PASS codex`
 - `PASS github-auth`
+- `PASS codex-auth`
 - `PASS codex-version`
 - `PASS gh-version`
 - `PASS git-version`

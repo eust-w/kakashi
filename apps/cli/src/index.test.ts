@@ -1,4 +1,4 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +12,14 @@ const cliEntry = join(repoRoot, "apps", "cli", "src", "index.ts");
 const tsconfig = join(repoRoot, "tsconfig.base.json");
 
 describe("kakashi CLI run inspection commands", () => {
+  it("uses the shared interactive selection replanner instead of duplicating plan logic", async () => {
+    const source = await readFile(cliEntry, "utf8");
+
+    expect(source).toContain("applyInteractiveSelection");
+    expect(source).not.toContain("CapabilityGraphBuilder");
+    expect(source).not.toContain("FusionPlanner");
+  });
+
   it("lists runs and prints event logs as machine-readable JSON", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "kakashi-cli-"));
     const store = new RunStore(join(cwd, ".kakashi", "runs"));

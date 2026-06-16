@@ -143,7 +143,7 @@ For public repositories, a normal GitHub CLI login is usually enough. For privat
 
 ### Codex
 
-Kakashi calls the local `codex exec` command, so Codex CLI must work independently before Kakashi can execute real code changes.
+Kakashi calls the local `codex exec` command, so Codex CLI must work independently before Kakashi can execute real code changes. `kakashi doctor` runs `codex login status` to confirm Codex is authenticated, not merely installed.
 
 Use browser or device login:
 
@@ -194,6 +194,7 @@ Expected successful checks include:
 - `PASS gh`
 - `PASS codex`
 - `PASS github-auth`
+- `PASS codex-auth`
 - `PASS codex-version`
 - `PASS gh-version`
 - `PASS git-version`
