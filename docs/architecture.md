@@ -14,6 +14,7 @@ Kakashi is an orchestration layer above Codex CLI. It does not generate canned p
 7. `RepoManager` clones the main repository into the output directory and auxiliary repositories under `.kakashi/sources`.
    Materialization uses the selected repository branch from GitHub metadata so the generated project matches the analyzed candidate.
 8. `CodexExecutor` invokes `codex exec` in the output directory with the fusion plan and source paths.
+   A non-zero Codex exit is a failed run even if the cloned source project already passes its own commands; Kakashi exports that failure instead of letting verifier success mask an incomplete fusion.
 9. `Verifier` detects package manager and project commands from root and nested manifests, then runs install/build/test/lint/start checks. Kakashi combines detected Node, Python, Go, and Rust verification steps instead of stopping at the first ecosystem, and nested project checks execute from their own directories rather than from the repository root.
 10. `GapDetector` extracts missing dependency/capability signals from real logs and can trigger another GitHub search iteration.
 11. `Exporter` writes reports, provenance, and source license copies. Machine-readable and human-readable exported artifacts are redacted before writing so command output, Codex messages, requirements, and verifier summaries do not persist common API keys, tokens, passwords, or authorization headers.

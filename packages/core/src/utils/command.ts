@@ -76,6 +76,11 @@ export async function runCommand(
       options.signal?.removeEventListener("abort", abortListener);
       reject(error);
     });
+    child.stdin.on("error", (error: NodeJS.ErrnoException) => {
+      if (error.code === "EPIPE" || error.code === "ERR_STREAM_DESTROYED") return;
+      options.signal?.removeEventListener("abort", abortListener);
+      reject(error);
+    });
     child.stdout.on("data", (chunk: Buffer) => {
       const text = redactSecrets(chunk.toString("utf8"));
       stdout += text;

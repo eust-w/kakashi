@@ -39,6 +39,15 @@ describe("runCommand", () => {
     expect(result.stdout).not.toContain("secret-value");
   });
 
+  it("returns the child result when the process exits before reading provided stdin", async () => {
+    const result = await runCommand(process.execPath, ["-e", "process.stdin.destroy(); process.exit(7);"], {
+      cwd: process.cwd(),
+      input: "x".repeat(1_000_000)
+    });
+
+    expect(result.exitCode).toBe(7);
+  });
+
   it("captures stderr/stdout callbacks", async () => {
     let stdout = "";
     let stderr = "";

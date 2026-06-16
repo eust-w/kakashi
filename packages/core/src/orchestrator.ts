@@ -1,26 +1,19 @@
 import { join, resolve } from "node:path";
 import type {
   Capability,
+  CapabilityGraph,
   CodexResult,
   FusionPlan,
   KakashiOptions,
   KakashiRunState,
   RepoAnalysis,
   RepoCandidate,
+  RunReport,
   RunEvent,
   RunMode,
+  RequirementSpec,
   VerificationResult
 } from "./types";
-import { RequirementParser } from "./requirement-parser";
-import { GitHubSearcher } from "./github-searcher";
-import { RepoManager } from "./repo-manager";
-import { RepoAnalyzer } from "./repo-analyzer";
-import { CapabilityGraphBuilder } from "./capability-graph";
-import { FusionPlanner } from "./fusion-planner";
-import { CodexExecutor } from "./codex-executor";
-import { Verifier } from "./verifier";
-import { GapDetector } from "./gap-detector";
-import { Exporter } from "./exporter";
 import { RunStore } from "./run-store";
 import { KakashiError } from "./errors";
 import { emptyDir, ensureDir, isDirectoryEmpty, pathExists, writeJsonFile } from "./utils/fs";
@@ -29,6 +22,7 @@ import { redactObject } from "./utils/redaction";
 export interface OrchestratorOptions extends Partial<KakashiOptions> {
   workDir?: string;
   onEvent?: (event: RunEvent) => void;
+  services?: Partial<OrchestratorServices>;
 }
 
 export interface PreparedRun {
@@ -38,24 +32,59 @@ export interface PreparedRun {
   plan: FusionPlan;
 }
 
+export interface OrchestratorServices {
+  parser: { parse(input: string): RequirementSpec };
+  searcher: {
+    search(
+      spec: RequirementSpec,
+      options: { cwd: string; maxRepos: number; allowCopyleft: boolean }
+    ): Promise<RepoCandidate[]>;
+  };
+  repoManager: {
+    cloneToCache(candidate: RepoCandidate, cacheDir: string, timeoutMs: number, signal?: AbortSignal): Promise<string>;
+    cloneMainToOutput(candidate: RepoCandidate, outputDir: string, timeoutMs: number, signal?: AbortSignal): Promise<void>;
+    cloneAuxiliary(candidate: RepoCandidate, sourcesDir: string, timeoutMs: number, signal?: AbortSignal): Promise<string>;
+  };
+  analyzer: { analyze(candidate: RepoCandidate, localPath: string, capabilities: Capability[]): Promise<RepoAnalysis> };
+  graphBuilder: { build(capabilities: Capability[], analyses: RepoAnalysis[]): CapabilityGraph };
+  planner: { createPlanForRequirement(graph: CapabilityGraph, spec: RequirementSpec, options: { outputDir: string }): FusionPlan };
+  codex: {
+    execute(
+      plan: FusionPlan,
+      instruction: string,
+      options: {
+        cwd: string;
+        timeoutMs: number;
+        model?: string;
+        signal?: AbortSignal;
+        onEvent?: (event: unknown) => void;
+        onText?: (text: string) => void;
+      }
+    ): Promise<CodexResult>;
+  };
+  verifier: { verify(projectDir: string, timeoutMs: number, signal?: AbortSignal): Promise<VerificationResult> };
+  gapDetector: { detect(logs: string, capabilities: Capability[]): Capability[] };
+  exporter: {
+    exportReport(
+      runId: string,
+      plan: FusionPlan,
+      verification: VerificationResult,
+      codexRuns: CodexResult[],
+      verificationAttempts: VerificationResult[]
+    ): Promise<RunReport>;
+  };
+}
+
 const DEFAULT_TIMEOUT = 300_000;
 
 export class KakashiOrchestrator {
   private readonly abortController = new AbortController();
-  private readonly parser = new RequirementParser();
-  private readonly searcher = new GitHubSearcher();
-  private readonly repoManager = new RepoManager();
-  private readonly analyzer = new RepoAnalyzer();
-  private readonly graphBuilder = new CapabilityGraphBuilder();
-  private readonly planner = new FusionPlanner();
-  private readonly codex = new CodexExecutor();
-  private readonly verifier = new Verifier();
-  private readonly gapDetector = new GapDetector();
-  private readonly exporter = new Exporter();
+  private readonly services: Partial<OrchestratorServices>;
   readonly store: RunStore;
 
   constructor(private readonly options: OrchestratorOptions) {
     const workDir = resolve(options.workDir ?? process.cwd());
+    this.services = { ...options.services };
     this.store = new RunStore(join(workDir, ".kakashi", "runs"));
   }
 
@@ -120,7 +149,7 @@ export class KakashiOrchestrator {
           ? "Implement the fusion plan end to end, then run the detected project verification commands."
           : `Repair the real verification failures from the previous iteration. Do not bypass the failing command.`;
 
-      const codexResult = await this.codex.execute(plan, instruction, {
+      const codexResult = await (await this.getCodex()).execute(plan, instruction, {
         cwd: plan.outputDir,
         timeoutMs: opts.commandTimeoutMs,
         model: opts.codexModel,
@@ -134,23 +163,29 @@ export class KakashiOrchestrator {
       });
       codexRuns.push(codexResult);
       this.throwIfCancelled();
+      if (!codexResult.ok) {
+        verification = codexFailureVerification(codexResult);
+        verificationAttempts.push(verification);
+        await this.emit(state, "executing", "error", verification.summary, codexResult);
+        break;
+      }
 
       await this.emit(state, "verifying", "info", "Running real project verification commands.");
-      verification = await this.verifier.verify(plan.outputDir, opts.commandTimeoutMs, opts.signal);
+      verification = await (await this.getVerifier()).verify(plan.outputDir, opts.commandTimeoutMs, opts.signal);
       verificationAttempts.push(verification);
       this.throwIfCancelled();
       await this.emit(state, "verifying", verification.ok ? "info" : "warn", verification.summary, verification);
       if (verification.ok) break;
 
       const logs = verification.steps.map((step) => `${step.name}\n${step.result.stdout}\n${step.result.stderr}`).join("\n");
-      const gaps = this.gapDetector.detect(logs, plan.requirement.capabilities);
+      const gaps = (await this.getGapDetector()).detect(logs, plan.requirement.capabilities);
       if (gaps.length > 0 && iteration < opts.maxIterations) {
         await this.extendPlanWithGaps(state, plan, gaps, opts);
       }
     }
 
     await this.emit(state, "exporting", "info", "Writing provenance and verification reports.");
-    const report = await this.exporter.exportReport(state.runId, plan, verification, codexRuns, verificationAttempts);
+    const report = await (await this.getExporter()).exportReport(state.runId, plan, verification, codexRuns, verificationAttempts);
     const completed: KakashiRunState = {
       ...state,
       stage: verification.ok ? "completed" : "failed",
@@ -167,12 +202,12 @@ export class KakashiOrchestrator {
     this.throwIfCancelled();
     await ensureDir(opts.cacheDir);
     await this.emit(state, "parsing", "info", "Parsing requirement.");
-    const spec = this.parser.parse(state.requirementText);
+    const spec = (await this.getParser()).parse(state.requirementText);
     await this.store.save({ ...state, stage: "parsing", spec });
 
     await this.emit(state, "searching", "info", "Searching GitHub for source repositories.");
     this.throwIfCancelled();
-    const candidates = await this.searcher.search(spec, {
+    const candidates = await (await this.getSearcher()).search(spec, {
       cwd: opts.workDir,
       maxRepos: opts.maxRepos,
       allowCopyleft: opts.allowCopyleft
@@ -187,13 +222,13 @@ export class KakashiOrchestrator {
     const analyses: RepoAnalysis[] = [];
     for (const candidate of candidates) {
       this.throwIfCancelled();
-      const localPath = await this.repoManager.cloneToCache(candidate, opts.cacheDir, opts.commandTimeoutMs, opts.signal);
-      analyses.push(await this.analyzer.analyze(candidate, localPath, spec.capabilities));
+      const localPath = await (await this.getRepoManager()).cloneToCache(candidate, opts.cacheDir, opts.commandTimeoutMs, opts.signal);
+      analyses.push(await (await this.getAnalyzer()).analyze(candidate, localPath, spec.capabilities));
       await this.emit(state, "analyzing", "info", `Analyzed ${candidate.fullName}.`);
     }
 
-    const graph = this.graphBuilder.build(spec.capabilities, analyses);
-    const plan = this.planner.createPlanForRequirement(graph, spec, { outputDir: opts.outputDir });
+    const graph = (await this.getGraphBuilder()).build(spec.capabilities, analyses);
+    const plan = (await this.getPlanner()).createPlanForRequirement(graph, spec, { outputDir: opts.outputDir });
     const preparedState: KakashiRunState = {
       ...state,
       stage: state.mode === "interactive" ? "waiting_for_confirmation" : "planning",
@@ -218,14 +253,14 @@ export class KakashiOrchestrator {
     }
 
     if (await isDirectoryEmpty(opts.outputDir)) {
-      await this.repoManager.cloneMainToOutput(plan.main.repo, opts.outputDir, opts.commandTimeoutMs, opts.signal);
+      await (await this.getRepoManager()).cloneMainToOutput(plan.main.repo, opts.outputDir, opts.commandTimeoutMs, opts.signal);
     }
 
     const sourcesDir = join(opts.outputDir, ".kakashi", "sources");
     await ensureDir(sourcesDir);
     for (const source of plan.auxiliaries) {
       this.throwIfCancelled();
-      source.localPath = await this.repoManager.cloneAuxiliary(source.repo, sourcesDir, opts.commandTimeoutMs, opts.signal);
+      source.localPath = await (await this.getRepoManager()).cloneAuxiliary(source.repo, sourcesDir, opts.commandTimeoutMs, opts.signal);
     }
     await writeJsonFile(join(opts.outputDir, ".kakashi", "fusion-plan.json"), redactObject(plan));
   }
@@ -241,7 +276,7 @@ export class KakashiOrchestrator {
       ...plan.requirement,
       capabilities: [...plan.requirement.capabilities, ...gaps]
     };
-    const candidates = await this.searcher.search(nextSpec, {
+    const candidates = await (await this.getSearcher()).search(nextSpec, {
       cwd: opts.workDir,
       maxRepos: Math.min(5, opts.maxRepos),
       allowCopyleft: opts.allowCopyleft
@@ -249,7 +284,7 @@ export class KakashiOrchestrator {
     const known = new Set([plan.main.repo.fullName, ...plan.auxiliaries.map((source) => source.repo.fullName)]);
     for (const candidate of candidates.filter((candidate) => !known.has(candidate.fullName)).slice(0, 2)) {
       this.throwIfCancelled();
-      const localPath = await this.repoManager.cloneAuxiliary(candidate, join(opts.outputDir, ".kakashi", "sources"), opts.commandTimeoutMs, opts.signal);
+      const localPath = await (await this.getRepoManager()).cloneAuxiliary(candidate, join(opts.outputDir, ".kakashi", "sources"), opts.commandTimeoutMs, opts.signal);
       plan.auxiliaries.push({
         role: "auxiliary",
         repo: candidate,
@@ -307,4 +342,95 @@ export class KakashiOrchestrator {
     await this.emit(failed, "failed", "error", message, error instanceof KakashiError ? error.details : undefined);
     return failed;
   }
+
+  private async getParser(): Promise<OrchestratorServices["parser"]> {
+    if (!this.services.parser) {
+      const { RequirementParser } = await import("./requirement-parser");
+      this.services.parser = new RequirementParser();
+    }
+    return this.services.parser;
+  }
+
+  private async getSearcher(): Promise<OrchestratorServices["searcher"]> {
+    if (!this.services.searcher) {
+      const { GitHubSearcher } = await import("./github-searcher");
+      this.services.searcher = new GitHubSearcher();
+    }
+    return this.services.searcher;
+  }
+
+  private async getRepoManager(): Promise<OrchestratorServices["repoManager"]> {
+    if (!this.services.repoManager) {
+      const { RepoManager } = await import("./repo-manager");
+      this.services.repoManager = new RepoManager();
+    }
+    return this.services.repoManager;
+  }
+
+  private async getAnalyzer(): Promise<OrchestratorServices["analyzer"]> {
+    if (!this.services.analyzer) {
+      const { RepoAnalyzer } = await import("./repo-analyzer");
+      this.services.analyzer = new RepoAnalyzer();
+    }
+    return this.services.analyzer;
+  }
+
+  private async getGraphBuilder(): Promise<OrchestratorServices["graphBuilder"]> {
+    if (!this.services.graphBuilder) {
+      const { CapabilityGraphBuilder } = await import("./capability-graph");
+      this.services.graphBuilder = new CapabilityGraphBuilder();
+    }
+    return this.services.graphBuilder;
+  }
+
+  private async getPlanner(): Promise<OrchestratorServices["planner"]> {
+    if (!this.services.planner) {
+      const { FusionPlanner } = await import("./fusion-planner");
+      this.services.planner = new FusionPlanner();
+    }
+    return this.services.planner;
+  }
+
+  private async getCodex(): Promise<OrchestratorServices["codex"]> {
+    if (!this.services.codex) {
+      const { CodexExecutor } = await import("./codex-executor");
+      this.services.codex = new CodexExecutor();
+    }
+    return this.services.codex;
+  }
+
+  private async getVerifier(): Promise<OrchestratorServices["verifier"]> {
+    if (!this.services.verifier) {
+      const { Verifier } = await import("./verifier");
+      this.services.verifier = new Verifier();
+    }
+    return this.services.verifier;
+  }
+
+  private async getGapDetector(): Promise<OrchestratorServices["gapDetector"]> {
+    if (!this.services.gapDetector) {
+      const { GapDetector } = await import("./gap-detector");
+      this.services.gapDetector = new GapDetector();
+    }
+    return this.services.gapDetector;
+  }
+
+  private async getExporter(): Promise<OrchestratorServices["exporter"]> {
+    if (!this.services.exporter) {
+      const { Exporter } = await import("./exporter");
+      this.services.exporter = new Exporter();
+    }
+    return this.services.exporter;
+  }
+}
+
+function codexFailureVerification(codexResult: CodexResult): VerificationResult {
+  const reason = codexResult.result.timedOut
+    ? "timed out"
+    : `exited with code ${codexResult.exitCode ?? "unknown"}`;
+  return {
+    ok: false,
+    steps: [],
+    summary: `Codex execution failed (${reason}); project verification was not run because code modification did not complete.`
+  };
 }

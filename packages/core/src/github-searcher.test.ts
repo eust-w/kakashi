@@ -55,4 +55,12 @@ describe("isTransientNetworkError", () => {
       })
     ).toBe(true);
   });
+
+  it("reads transient network messages from plain error objects", () => {
+    expect(isTransientNetworkError({ message: "connect timeout while contacting api.github.com" })).toBe(true);
+    expect(isTransientNetworkError({ cause: "ECONNRESET from proxy tunnel" })).toBe(true);
+    expect(isTransientNetworkError({ status: 404, message: "repository not found" })).toBe(false);
+    expect(isTransientNetworkError({})).toBe(false);
+    expect(isTransientNetworkError("validation failed")).toBe(false);
+  });
 });
