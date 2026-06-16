@@ -16,7 +16,7 @@ Kakashi is an orchestration layer above Codex CLI. It does not generate canned p
 8. `CodexExecutor` invokes `codex exec` in the output directory with the fusion plan and source paths.
 9. `Verifier` detects package manager and project commands from manifests and runs install/build/test/lint/start checks.
 10. `GapDetector` extracts missing dependency/capability signals from real logs and can trigger another GitHub search iteration.
-11. `Exporter` writes reports, provenance, and source license copies.
+11. `Exporter` writes reports, provenance, and source license copies. Machine-readable and human-readable exported artifacts are redacted before writing so command output, Codex messages, requirements, and verifier summaries do not persist common API keys, tokens, passwords, or authorization headers.
 
 ## Local Prerequisite Checks
 

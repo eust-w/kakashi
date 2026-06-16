@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 import type { FusionPlan, RunReport, VerificationResult, CodexResult } from "./types";
 import { ensureDir, pathExists, writeJsonFile } from "./utils/fs";
 import { slugify } from "./utils/ids";
+import { redactObject, redactSecrets } from "./utils/redaction";
 
 export class Exporter {
   async exportReport(
@@ -12,7 +13,7 @@ export class Exporter {
     codexRuns: CodexResult[],
     verificationAttempts: VerificationResult[] = [verification]
   ): Promise<RunReport> {
-    const report: RunReport = {
+    const report = redactObject<RunReport>({
       runId,
       requirement: plan.requirement,
       plan,
@@ -21,15 +22,15 @@ export class Exporter {
       codexRuns,
       outputDir: plan.outputDir,
       completedAt: new Date().toISOString()
-    };
+    });
 
     const kakashiDir = join(plan.outputDir, ".kakashi");
     await ensureDir(kakashiDir);
     await writeJsonFile(join(kakashiDir, "run-report.json"), report);
-    await writeJsonFile(join(plan.outputDir, "SOURCE_PROVENANCE.json"), this.provenance(plan));
+    await writeJsonFile(join(plan.outputDir, "SOURCE_PROVENANCE.json"), redactObject(this.provenance(plan)));
     await this.copyLicenses(plan);
     await this.writeMarkdownReport(report);
-    await this.writeReadme(plan, verification);
+    await this.writeReadme(report.plan, report.verification);
     return report;
   }
 
@@ -315,5 +316,5 @@ function formatList(values: Array<string | null | undefined>): string {
 
 async function writeFileSafe(path: string, content: string): Promise<void> {
   const { writeFile } = await import("node:fs/promises");
-  await writeFile(path, `${content.trimEnd()}\n`, "utf8");
+  await writeFile(path, `${redactSecrets(content).trimEnd()}\n`, "utf8");
 }

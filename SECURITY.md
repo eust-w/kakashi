@@ -20,6 +20,8 @@ Kakashi 依赖 GitHub 和 Codex 的本地认证。请使用以下方式管理密
 
 不要把密钥写入代码、README、issue、日志、生成项目或测试夹具。
 
+Kakashi 会在命令输出、运行状态事件、融合计划和导出报告写盘前做通用密钥脱敏。脱敏是防线之一，不应替代正确的凭据管理；不要把真实密钥放进需求文本、Codex 输出、验证日志或生成项目源码。
+
 ## English
 
 Do not post API keys, GitHub tokens, Codex access tokens, private repository content, full exploit code, or sensitive logs in public issues.
@@ -27,3 +29,5 @@ Do not post API keys, GitHub tokens, Codex access tokens, private repository con
 If GitHub Security Advisories are available for this repository, use a private advisory first. Otherwise, open a minimal public issue without sensitive details and include enough context for maintainers to follow up privately.
 
 Kakashi relies on local GitHub and Codex authentication. Use `gh auth login`, `codex login`, CI secrets, temporary shell environment variables, or a system credential manager. Do not commit secrets to code, README files, issues, logs, generated projects, or test fixtures.
+
+Kakashi redacts common secrets before writing command output, run-state events, fusion plans, and exported reports to disk. Redaction is a defense-in-depth measure, not a substitute for correct credential handling; do not place real secrets in prompts, Codex output, verifier logs, or generated project source.
