@@ -30,6 +30,7 @@ CLI inspection commands read this store directly:
 - `kakashi events <runId>` prints the append-only event log.
 - `--json` on supported commands produces clean machine-readable output for scripts and CI.
 - CLI JSON mode writes successful payloads to stdout and structured errors to stderr, which lets shell scripts safely pipe stdout without losing diagnostics.
+- CLI output directories may be inside or outside the workspace, but they must not be the workspace itself or one of its parent directories. This prevents `--force` from clearing the active project tree.
 
 Generated projects contain:
 

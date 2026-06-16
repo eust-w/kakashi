@@ -246,6 +246,7 @@ Common options:
 - `--json`: print clean JSON for supported commands without progress logs on stdout.
 
 `--max-repos`, `--max-iterations`, and `--limit` must be positive integers. With `--json`, successful payloads are written to stdout; option errors and missing-run errors are written to stderr as `{ "error": "..." }`, so scripts can separate successful output from failure diagnostics.
+`--out` must not point at the current workspace or one of its parent directories; even with `--force`, Kakashi will not clear the current project directory.
 
 ## Web UI
 

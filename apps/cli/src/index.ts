@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import pc from "picocolors";
 import { checkbox, confirm } from "@inquirer/prompts";
 import { getEmbeddedWebAssets } from "./runtime-web-assets";
@@ -194,9 +194,10 @@ interface ServeOptions {
 }
 
 function createOrchestrator(options: CliOptions): KakashiOrchestrator {
+  const workDir = process.cwd();
   const orchestratorOptions: OrchestratorOptions = {
-    workDir: process.cwd(),
-    outputDir: options.out,
+    workDir,
+    outputDir: resolveSafeOutputDir(workDir, options.out),
     maxRepos: parsePositiveInteger(options.maxRepos, "max-repos"),
     maxIterations: parsePositiveInteger(options.maxIterations, "max-iterations"),
     allowCopyleft: Boolean(options.allowCopyleft),
@@ -284,6 +285,16 @@ function parsePositiveInteger(value: string, name: string): number {
     throw new Error(`${name} must be a positive integer.`);
   }
   return parsed;
+}
+
+function resolveSafeOutputDir(workDir: string, outputDir: string): string {
+  const root = resolve(workDir);
+  const resolved = resolve(root, outputDir);
+  const fromOutputToWorkDir = relative(resolved, root);
+  if (!fromOutputToWorkDir || (!fromOutputToWorkDir.startsWith("..") && !isAbsolute(fromOutputToWorkDir))) {
+    throw new Error("Output directory must not be the current workspace or one of its parent directories.");
+  }
+  return resolved;
 }
 
 function parsePort(value: string): number {

@@ -88,6 +88,32 @@ describe("kakashi CLI run inspection commands", () => {
     expect(JSON.parse(result.stderr)).toEqual({ error: "max-repos must be a positive integer." });
   });
 
+  it("rejects the current workspace as an output directory before GitHub access", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "kakashi-cli-"));
+
+    const result = await runCli(["run", "build a cli", "--out", ".", "--force"], cwd, {
+      GITHUB_TOKEN: "",
+      GH_TOKEN: "",
+      GH_CONFIG_DIR: join(cwd, "gh-config")
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Output directory must not be the current workspace or one of its parent directories.");
+    expect(result.stderr).not.toContain("GitHub authentication");
+  });
+
+  it("rejects parent directories as output targets", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "kakashi-cli-"));
+
+    const result = await runCli(["run", "build a cli", "--out", "..", "--json"], cwd);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(JSON.parse(result.stderr)).toEqual({
+      error: "Output directory must not be the current workspace or one of its parent directories."
+    });
+  });
+
   it("rejects invalid server ports before starting the server", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "kakashi-cli-"));
 
