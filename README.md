@@ -245,6 +245,8 @@ kakashi events <runId> --json
 - `--force`：允许覆盖目标输出目录。
 - `--json`：在支持的命令中输出干净 JSON，避免进度日志污染 stdout。
 
+`--max-repos`、`--max-iterations`、`--limit` 必须是正整数。使用 `--json` 时，成功结果写入 stdout；参数错误、缺失运行等错误以 `{ "error": "..." }` 写入 stderr，便于脚本区分成功输出和失败信息。
+
 ## Web UI
 
 单文件可执行版本内嵌 Web UI：

@@ -29,6 +29,7 @@ CLI inspection commands read this store directly:
 - `kakashi inspect <runId>` prints the latest run state.
 - `kakashi events <runId>` prints the append-only event log.
 - `--json` on supported commands produces clean machine-readable output for scripts and CI.
+- CLI JSON mode writes successful payloads to stdout and structured errors to stderr, which lets shell scripts safely pipe stdout without losing diagnostics.
 
 Generated projects contain:
 

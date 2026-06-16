@@ -245,6 +245,8 @@ Common options:
 - `--force`: allow overwriting the output directory.
 - `--json`: print clean JSON for supported commands without progress logs on stdout.
 
+`--max-repos`, `--max-iterations`, and `--limit` must be positive integers. With `--json`, successful payloads are written to stdout; option errors and missing-run errors are written to stderr as `{ "error": "..." }`, so scripts can separate successful output from failure diagnostics.
+
 ## Web UI
 
 The single-file executable embeds the Web UI:

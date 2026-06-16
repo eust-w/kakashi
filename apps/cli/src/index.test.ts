@@ -43,6 +43,50 @@ describe("kakashi CLI run inspection commands", () => {
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Run not found: missing-run");
   });
+
+  it("prints JSON errors for missing runs when JSON output is requested", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "kakashi-cli-"));
+
+    const result = await runCli(["events", "missing-run", "--json"], cwd);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(JSON.parse(result.stderr)).toEqual({ error: "Run not found: missing-run" });
+  });
+
+  it("rejects invalid auto-run numeric options before external authentication", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "kakashi-cli-"));
+
+    const result = await runCli(["run", "build a cli", "--out", "out", "--max-repos", "abc"], cwd, {
+      GITHUB_TOKEN: "",
+      GH_TOKEN: "",
+      GH_CONFIG_DIR: join(cwd, "gh-config")
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("max-repos must be a positive integer.");
+    expect(result.stderr).not.toContain("GitHub authentication");
+  });
+
+  it("rejects invalid repair iteration counts before creating a run", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "kakashi-cli-"));
+
+    const result = await runCli(["run", "build a cli", "--out", "out", "--max-iterations", "0"], cwd);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("max-iterations must be a positive integer.");
+    expect(result.stderr).not.toContain("Run created");
+  });
+
+  it("prints JSON errors for invalid run options when JSON output is requested", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "kakashi-cli-"));
+
+    const result = await runCli(["run", "build a cli", "--out", "out", "--max-repos", "abc", "--json"], cwd);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(JSON.parse(result.stderr)).toEqual({ error: "max-repos must be a positive integer." });
+  });
 });
 
 interface CliResult {
@@ -51,12 +95,13 @@ interface CliResult {
   exitCode: number | null;
 }
 
-async function runCli(args: string[], cwd: string): Promise<CliResult> {
+async function runCli(args: string[], cwd: string, env: NodeJS.ProcessEnv = {}): Promise<CliResult> {
   return await new Promise((resolveRun) => {
     const child = spawn(tsxBin, ["--tsconfig", tsconfig, cliEntry, ...args], {
       cwd,
       env: {
         ...process.env,
+        ...env,
         FORCE_COLOR: "0"
       },
       stdio: ["ignore", "pipe", "pipe"]

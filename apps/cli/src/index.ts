@@ -115,11 +115,11 @@ program
   .description("Inspect a previous run.")
   .argument("<runId>", "Run id.")
   .option("--json", "Print machine-readable JSON. This is the default for inspect.")
-  .action(async (runId: string) => {
+  .action(async (runId: string, options: JsonOptions) => {
     const orchestrator = new KakashiOrchestrator({ workDir: process.cwd() });
     const state = await orchestrator.store.load(runId);
     if (!state) {
-      console.error(pc.red(`Run not found: ${runId}`));
+      printError(`Run not found: ${runId}`, options);
       process.exitCode = 1;
       return;
     }
@@ -151,7 +151,7 @@ program
     const orchestrator = new KakashiOrchestrator({ workDir: process.cwd() });
     const state = await orchestrator.store.load(runId);
     if (!state) {
-      console.error(pc.red(`Run not found: ${runId}`));
+      printError(`Run not found: ${runId}`, options);
       process.exitCode = 1;
       return;
     }
@@ -164,7 +164,7 @@ program
   });
 
 program.parseAsync().catch((error: unknown) => {
-  console.error(pc.red(error instanceof Error ? error.message : String(error)));
+  printError(error instanceof Error ? error.message : String(error), { json: process.argv.includes("--json") });
   process.exitCode = 1;
 });
 
@@ -190,8 +190,8 @@ function createOrchestrator(options: CliOptions): KakashiOrchestrator {
   const orchestratorOptions: OrchestratorOptions = {
     workDir: process.cwd(),
     outputDir: options.out,
-    maxRepos: Number(options.maxRepos),
-    maxIterations: Number(options.maxIterations),
+    maxRepos: parsePositiveInteger(options.maxRepos, "max-repos"),
+    maxIterations: parsePositiveInteger(options.maxIterations, "max-iterations"),
     allowCopyleft: Boolean(options.allowCopyleft),
     force: Boolean(options.force),
     codexModel: options.model,
@@ -261,6 +261,14 @@ function printEventLog(events: RunEvent[]): void {
 
 function printJson(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
+}
+
+function printError(message: string, options: JsonOptions): void {
+  if (options.json) {
+    console.error(JSON.stringify({ error: message }, null, 2));
+    return;
+  }
+  console.error(pc.red(message));
 }
 
 function parsePositiveInteger(value: string, name: string): number {
