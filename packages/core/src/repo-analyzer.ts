@@ -1,5 +1,5 @@
 import { readFile, readdir } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import type {
   Capability,
   RepoAnalysis,
@@ -18,13 +18,38 @@ interface PackageJson {
 }
 
 const README_NAMES = ["README.md", "README.MD", "readme.md", "README", "docs/README.md"];
+const MANIFEST_NAMES = new Set([
+  "package.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
+  "package-lock.json",
+  "pyproject.toml",
+  "requirements.txt",
+  "go.mod",
+  "Cargo.toml",
+  "Gemfile",
+  "composer.json",
+  "Dockerfile"
+]);
+const SKIPPED_SCAN_DIRS = new Set([
+  ".git",
+  ".kakashi",
+  ".cache",
+  ".next",
+  ".turbo",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules"
+]);
+const MAX_MANIFEST_SCAN_DEPTH = 3;
 
 export class RepoAnalyzer {
   async analyze(candidate: RepoCandidate, localPath: string, capabilities: Capability[]): Promise<RepoAnalysis> {
     const manifests = await this.detectManifests(localPath);
     const readme = await this.readReadme(localPath);
     const stack = await this.detectStack(localPath, candidate, manifests);
-    const packageManagers = await this.detectPackageManagers(localPath);
+    const packageManagers = await this.detectPackageManagers(localPath, manifests);
     const commands = await this.detectCommands(localPath, manifests);
     const modules = await this.detectModules(localPath);
     const capabilityMatches = this.matchCapabilities(capabilities, readme, modules, manifests, candidate);
@@ -45,24 +70,9 @@ export class RepoAnalyzer {
   }
 
   private async detectManifests(localPath: string): Promise<string[]> {
-    const names = [
-      "package.json",
-      "pnpm-lock.yaml",
-      "yarn.lock",
-      "package-lock.json",
-      "pyproject.toml",
-      "requirements.txt",
-      "go.mod",
-      "Cargo.toml",
-      "Gemfile",
-      "composer.json",
-      "Dockerfile"
-    ];
     const found: string[] = [];
-    for (const name of names) {
-      if (await pathExists(join(localPath, name))) found.push(name);
-    }
-    return found;
+    await collectManifests(localPath, localPath, 0, found);
+    return found.sort((a, b) => manifestSortKey(a).localeCompare(manifestSortKey(b)));
   }
 
   private async readReadme(localPath: string): Promise<string> {
@@ -79,7 +89,7 @@ export class RepoAnalyzer {
     const stack = new Set<string>();
     if (candidate.language) stack.add(candidate.language.toLowerCase());
     for (const manifest of manifests) {
-      if (manifest === "package.json") {
+      if (manifest.endsWith("package.json")) {
         stack.add("node");
         const pkg = await readJsonFile<PackageJson>(join(localPath, manifest));
         const deps = { ...pkg.dependencies, ...pkg.devDependencies };
@@ -94,55 +104,61 @@ export class RepoAnalyzer {
           if (dep === "electron") stack.add("electron");
         }
       }
-      if (manifest === "pyproject.toml" || manifest === "requirements.txt") stack.add("python");
-      if (manifest === "go.mod") stack.add("go");
-      if (manifest === "Cargo.toml") stack.add("rust");
-      if (manifest === "Dockerfile") stack.add("docker");
+      if (manifest.endsWith("pyproject.toml") || manifest.endsWith("requirements.txt")) stack.add("python");
+      if (manifest.endsWith("go.mod")) stack.add("go");
+      if (manifest.endsWith("Cargo.toml")) stack.add("rust");
+      if (manifest.endsWith("Dockerfile")) stack.add("docker");
     }
     return [...stack].sort();
   }
 
-  private async detectPackageManagers(localPath: string): Promise<string[]> {
-    const managers: string[] = [];
-    if (await pathExists(join(localPath, "pnpm-lock.yaml"))) managers.push("pnpm");
-    if (await pathExists(join(localPath, "yarn.lock"))) managers.push("yarn");
-    if (await pathExists(join(localPath, "package-lock.json"))) managers.push("npm");
-    if (await pathExists(join(localPath, "package.json")) && managers.length === 0) managers.push("npm");
-    if (await pathExists(join(localPath, "pyproject.toml"))) managers.push("python");
-    if (await pathExists(join(localPath, "requirements.txt"))) managers.push("pip");
-    if (await pathExists(join(localPath, "go.mod"))) managers.push("go");
-    if (await pathExists(join(localPath, "Cargo.toml"))) managers.push("cargo");
-    return managers;
+  private async detectPackageManagers(localPath: string, manifests: string[]): Promise<string[]> {
+    const managers = new Set<string>();
+    for (const manifest of manifests) {
+      if (manifest.endsWith("package.json")) {
+        const pkg = await readJsonFile<PackageJson>(join(localPath, manifest));
+        managers.add(await detectNodeManagerForManifest(localPath, manifest, pkg));
+      }
+      if (manifest.endsWith("pyproject.toml")) managers.add("python");
+      if (manifest.endsWith("requirements.txt")) managers.add("pip");
+      if (manifest.endsWith("go.mod")) managers.add("go");
+      if (manifest.endsWith("Cargo.toml")) managers.add("cargo");
+    }
+    return [...managers];
   }
 
   private async detectCommands(localPath: string, manifests: string[]): Promise<RepoCommand[]> {
     const commands: RepoCommand[] = [];
-    if (manifests.includes("package.json")) {
-      const pkg = await readJsonFile<PackageJson>(join(localPath, "package.json"));
-      const manager = pkg.packageManager?.split("@")[0] ?? (await this.detectPackageManagers(localPath))[0] ?? "npm";
-      commands.push({ name: "install", command: `${manager} install`, source: "package.json", purpose: "install" });
+    for (const manifest of manifests.filter((manifest) => manifest.endsWith("package.json"))) {
+      const pkg = await readJsonFile<PackageJson>(join(localPath, manifest));
+      const manager = await detectNodeManagerForManifest(localPath, manifest, pkg);
+      const packageDir = dirname(manifest);
+      commands.push({ name: "install", command: formatNodeCommand(manager, packageDir, ["install"]), source: manifest, purpose: "install" });
       for (const [name, script] of Object.entries(pkg.scripts ?? {})) {
         commands.push({
           name,
-          command: `${manager} run ${name}`,
-          source: "package.json",
+          command: formatNodeCommand(manager, packageDir, ["run", name]),
+          source: manifest,
           purpose: classifyScript(name, script)
         });
       }
     }
-    if (manifests.includes("requirements.txt")) {
-      commands.push({ name: "install", command: "python3 -m pip install -r requirements.txt", source: "requirements.txt", purpose: "install" });
+    for (const manifest of manifests.filter((manifest) => manifest.endsWith("requirements.txt"))) {
+      commands.push({ name: "install", command: `python3 -m pip install -r ${manifest}`, source: manifest, purpose: "install" });
     }
-    if (manifests.includes("pyproject.toml")) {
-      commands.push({ name: "install", command: "python3 -m pip install -e .", source: "pyproject.toml", purpose: "install" });
+    for (const manifest of manifests.filter((manifest) => manifest.endsWith("pyproject.toml"))) {
+      const projectDir = dirname(manifest);
+      commands.push({ name: "install", command: `python3 -m pip install -e ${projectDir === "." ? "." : projectDir}`, source: manifest, purpose: "install" });
     }
-    if (manifests.includes("go.mod")) {
-      commands.push({ name: "test", command: "go test ./...", source: "go.mod", purpose: "test" });
-      commands.push({ name: "build", command: "go build ./...", source: "go.mod", purpose: "build" });
+    for (const manifest of manifests.filter((manifest) => manifest.endsWith("go.mod"))) {
+      const projectDir = dirname(manifest);
+      commands.push({ name: "test", command: formatDirectoryCommand(projectDir, "go test ./..."), source: manifest, purpose: "test" });
+      commands.push({ name: "build", command: formatDirectoryCommand(projectDir, "go build ./..."), source: manifest, purpose: "build" });
     }
-    if (manifests.includes("Cargo.toml")) {
-      commands.push({ name: "test", command: "cargo test", source: "Cargo.toml", purpose: "test" });
-      commands.push({ name: "build", command: "cargo build", source: "Cargo.toml", purpose: "build" });
+    for (const manifest of manifests.filter((manifest) => manifest.endsWith("Cargo.toml"))) {
+      const projectDir = dirname(manifest);
+      commands.push({ name: "test", command: formatDirectoryCommand(projectDir, "cargo test"), source: manifest, purpose: "test" });
+      commands.push({ name: "build", command: formatDirectoryCommand(projectDir, "cargo build"), source: manifest, purpose: "build" });
     }
     return commands;
   }
@@ -228,6 +244,48 @@ function classifyScript(name: string, script: string): RepoCommand["purpose"] {
   return "other";
 }
 
+async function collectManifests(rootPath: string, dir: string, depth: number, found: string[]): Promise<void> {
+  if (depth > MAX_MANIFEST_SCAN_DEPTH) return;
+  const entries = await safeReadDirEntries(dir);
+  for (const entry of entries) {
+    const path = join(dir, entry.name);
+    if (entry.isFile() && MANIFEST_NAMES.has(entry.name)) {
+      found.push(relative(rootPath, path).split(sep).join("/"));
+      continue;
+    }
+    if (!entry.isDirectory() || SKIPPED_SCAN_DIRS.has(entry.name)) continue;
+    await collectManifests(rootPath, path, depth + 1, found);
+  }
+}
+
+function manifestSortKey(path: string): string {
+  const depth = path.split("/").length;
+  return `${String(depth).padStart(2, "0")}:${path}`;
+}
+
+async function detectNodeManagerForManifest(localPath: string, manifest: string, pkg: PackageJson): Promise<string> {
+  if (pkg.packageManager) return pkg.packageManager.split("@")[0] ?? "npm";
+  const packageDir = dirname(manifest);
+  if (await pathExists(join(localPath, packageDir, "pnpm-lock.yaml"))) return "pnpm";
+  if (await pathExists(join(localPath, packageDir, "yarn.lock"))) return "yarn";
+  if (await pathExists(join(localPath, packageDir, "package-lock.json"))) return "npm";
+  if (packageDir !== "." && await pathExists(join(localPath, "pnpm-lock.yaml"))) return "pnpm";
+  if (packageDir !== "." && await pathExists(join(localPath, "yarn.lock"))) return "yarn";
+  return "npm";
+}
+
+function formatNodeCommand(manager: string, packageDir: string, args: string[]): string {
+  const suffix = args.join(" ");
+  if (packageDir === ".") return `${manager} ${suffix}`;
+  if (manager === "pnpm") return `pnpm --dir ${packageDir} ${suffix}`;
+  if (manager === "yarn") return `yarn --cwd ${packageDir} ${suffix}`;
+  return `npm --prefix ${packageDir} ${suffix}`;
+}
+
+function formatDirectoryCommand(projectDir: string, command: string): string {
+  return projectDir === "." ? command : `cd ${projectDir} && ${command}`;
+}
+
 function summarize(text: string): string {
   return text
     .replace(/```[\s\S]*?```/g, "")
@@ -242,8 +300,7 @@ function summarize(text: string): string {
 
 async function safeReadDir(path: string): Promise<string[]> {
   try {
-    const entries = await readdir(path, { withFileTypes: true });
-    return entries
+    return (await safeReadDirEntries(path))
       .filter((entry) => !entry.name.startsWith("."))
       .map((entry) => entry.name)
       .sort();
@@ -252,3 +309,10 @@ async function safeReadDir(path: string): Promise<string[]> {
   }
 }
 
+async function safeReadDirEntries(path: string): Promise<import("node:fs").Dirent[]> {
+  try {
+    return (await readdir(path, { withFileTypes: true })).filter((entry) => !entry.name.startsWith("."));
+  } catch {
+    return [];
+  }
+}
