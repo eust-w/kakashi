@@ -10,7 +10,6 @@ import { describe, expect, it } from "vitest";
 import { resolveOutputDirInsideWorkDir } from "./output-path";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const tsxBin = join(repoRoot, "node_modules", ".bin", "tsx");
 const serverEntry = join(repoRoot, "apps", "server", "src", "index.ts");
 const tsconfig = join(repoRoot, "tsconfig.base.json");
 
@@ -71,13 +70,67 @@ describe("server run lifecycle", () => {
     const saved = JSON.parse(await readFile(statePath, "utf8")) as { stage: string };
     expect(saved.stage).toBe("completed");
   });
+
+  it("removes failed interactive preparation from the active run registry", async () => {
+    const workDir = await mkdtemp(join(tmpdir(), "kakashi-server-work-"));
+    const emptyBin = join(workDir, "empty-bin");
+    await mkdir(emptyBin, { recursive: true });
+
+    await withRunningServer(
+      workDir,
+      async (baseUrl) => {
+        const createdResponse = await fetch(`${baseUrl}/api/runs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "interactive",
+            requirement: "build a real CLI",
+            outputDir: "generated/cli",
+            options: { maxRepos: 1 }
+          })
+        });
+        expect(createdResponse.status).toBe(202);
+        const created = (await createdResponse.json()) as { runId: string };
+
+        const failed = await waitForRunStage(baseUrl, created.runId, "failed");
+        expect(failed.error).toMatch(/GitHub authentication is required/);
+
+        const confirmResponse = await fetch(`${baseUrl}/api/runs/${created.runId}/confirm-plan`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirmed: true })
+        });
+        const confirm = (await confirmResponse.json()) as { error?: string };
+
+        expect(confirmResponse.status).toBe(404);
+        expect(confirm.error).toMatch(/not active/i);
+      },
+      {
+        GITHUB_TOKEN: "",
+        GH_TOKEN: "",
+        GH_CONFIG_DIR: join(workDir, "gh-config"),
+        PATH: emptyBin
+      }
+    );
+  });
 });
 
-async function withRunningServer(workDir: string, run: (baseUrl: string) => Promise<void>): Promise<void> {
+async function withRunningServer(
+  workDir: string,
+  run: (baseUrl: string) => Promise<void>,
+  env: NodeJS.ProcessEnv = {}
+): Promise<void> {
   const port = await getOpenPort();
-  const child = spawn(tsxBin, ["--tsconfig", tsconfig, serverEntry, `--port=${port}`], {
+  const serverArgs = [
+    join(repoRoot, "node_modules", "tsx", "dist", "cli.mjs"),
+    "--tsconfig",
+    tsconfig,
+    serverEntry,
+    `--port=${port}`
+  ];
+  const child = spawn(process.execPath, serverArgs, {
     cwd: workDir,
-    env: { ...process.env, KAKASHI_WEB_DIST: "" }
+    env: { ...process.env, ...env, KAKASHI_WEB_DIST: "" }
   });
   const output = captureOutput(child);
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -88,6 +141,19 @@ async function withRunningServer(workDir: string, run: (baseUrl: string) => Prom
     child.kill("SIGTERM");
     if (child.exitCode === null) await once(child, "exit");
   }
+}
+
+async function waitForRunStage(baseUrl: string, runId: string, stage: string): Promise<{ stage: string; error?: string }> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const response = await fetch(`${baseUrl}/api/runs/${runId}`);
+    if (response.ok) {
+      const state = (await response.json()) as { stage: string; error?: string };
+      if (state.stage === stage) return state;
+    }
+    await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+  }
+  throw new Error(`Run ${runId} did not reach ${stage} within 5 seconds.`);
 }
 
 async function getOpenPort(): Promise<number> {

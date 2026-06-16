@@ -87,7 +87,9 @@ export function createApp(workDir = process.cwd(), web?: string | WebAssetSource
       if (body.mode === "auto") {
         void orchestrator.runState(state).finally(() => running.delete(state.runId));
       } else {
-        void orchestrator.prepareState(state).catch(() => undefined);
+        void orchestrator.prepareState(state).catch(() => {
+          running.delete(state.runId);
+        });
       }
     } catch (error) {
       next(error);

@@ -33,6 +33,12 @@ CLI inspection commands read this store directly:
 - Run IDs are opaque store keys and may contain only letters, numbers, `_`, and `-`; the store rejects path-like IDs before reading or writing state files, and run listing ignores unrelated directories in the run store.
 - CLI output directories may be inside or outside the workspace, but they must not be the workspace itself or one of its parent directories. This prevents `--force` from clearing the active project tree.
 
+## Server API Runtime
+
+- Auto runs stay active only while background orchestration is running.
+- Interactive runs stay active only after preparation succeeds and the plan is waiting for confirmation.
+- If interactive preparation fails, Kakashi persists the failed state and removes the in-memory active run entry; later confirmation requests return `404` instead of acting on a stale orchestrator.
+
 Generated projects contain:
 
 - `.kakashi/fusion-plan.json`
