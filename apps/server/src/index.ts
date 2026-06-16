@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import {
+  applyInteractiveSelection,
   isKakashiError,
   KakashiOrchestrator,
   RunStore,
@@ -52,6 +53,10 @@ const CreateRunSchema = z.object({
 
 const ConfirmSchema = z.object({
   confirmed: z.boolean()
+});
+
+const SelectRepositoriesSchema = z.object({
+  selectedRepositories: z.array(z.string().min(1)).min(1).max(50)
 });
 
 const running = new Map<string, KakashiOrchestrator>();
@@ -158,6 +163,28 @@ export function createApp(workDir = process.cwd(), web?: string | WebAssetSource
       }
       res.status(202).json(state);
       void runPreparedInBackground(orchestrator, state, state.plan).finally(() => running.delete(req.params.id));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/runs/:id/select-repositories", async (req, res, next) => {
+    try {
+      const body = SelectRepositoriesSchema.parse(req.body);
+      const orchestrator = running.get(req.params.id);
+      const store = orchestrator?.store ?? createRunStore(workDir);
+      const state = await store.load(req.params.id);
+      if (!state) {
+        res.status(404).json({ error: "Run not found." });
+        return;
+      }
+      if (state.stage !== "waiting_for_confirmation") {
+        res.status(409).json({ error: "Repository selection is only available after the fusion plan is ready." });
+        return;
+      }
+      const updated = applyInteractiveSelection(state, body.selectedRepositories);
+      await store.save(updated);
+      res.json(updated);
     } catch (error) {
       next(error);
     }

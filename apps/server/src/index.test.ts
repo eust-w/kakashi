@@ -7,6 +7,8 @@ import { createServer } from "node:net";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { applyInteractiveSelection } from "../../../packages/core/src/interactive-selection";
+import type { KakashiRunState, RepoAnalysis, RepoCandidate, RequirementSpec } from "../../../packages/core/src/types";
 import { resolveOutputDirInsideWorkDir } from "./output-path";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -35,6 +37,93 @@ describe("resolveOutputDirInsideWorkDir", () => {
 });
 
 describe("server run lifecycle", () => {
+  it("rebuilds the interactive graph and plan from selected analyzed repositories", () => {
+    const now = new Date().toISOString();
+    const requirement = requirementSpec();
+    const primaryAnalysis = repoAnalysis("open-source/primary", 1, "search", 0.92);
+    const auxiliaryAnalysis = repoAnalysis("open-source/auxiliary", 2, "search", 0.84);
+    const state: KakashiRunState = {
+      runId: "run-selection",
+      mode: "interactive",
+      stage: "waiting_for_confirmation",
+      requirementText: requirement.raw,
+      outputDir: "/tmp/kakashi-selection-out",
+      createdAt: now,
+      updatedAt: now,
+      spec: requirement,
+      candidates: [primaryAnalysis.candidate, auxiliaryAnalysis.candidate],
+      analyses: [primaryAnalysis, auxiliaryAnalysis]
+    };
+
+    const updated = applyInteractiveSelection(state, [auxiliaryAnalysis.candidate.fullName]);
+
+    expect(updated.graph?.repos.map((analysis) => analysis.candidate.fullName)).toEqual([auxiliaryAnalysis.candidate.fullName]);
+    expect(updated.graph?.edges.map((edge) => edge.repoFullName)).toEqual([auxiliaryAnalysis.candidate.fullName]);
+    expect(updated.plan?.main.repo.fullName).toBe(auxiliaryAnalysis.candidate.fullName);
+    expect(updated.plan?.auxiliaries).toHaveLength(0);
+    expect(updated.plan?.requirement).toBe(requirement);
+    expect(updated.plan?.outputDir).toBe(state.outputDir);
+    expect(updated.stage).toBe("waiting_for_confirmation");
+  });
+
+  it("rejects an interactive selection that does not include analyzed repositories", () => {
+    const now = new Date().toISOString();
+    const requirement = requirementSpec();
+    const state: KakashiRunState = {
+      runId: "run-selection-empty",
+      mode: "interactive",
+      stage: "waiting_for_confirmation",
+      requirementText: requirement.raw,
+      outputDir: "/tmp/kakashi-selection-out",
+      createdAt: now,
+      updatedAt: now,
+      spec: requirement,
+      candidates: [],
+      analyses: [repoAnalysis("open-source/primary", 1, "search", 0.92)]
+    };
+
+    expect(() => applyInteractiveSelection(state, ["missing/repo"])).toThrow(/selected repository/i);
+  });
+
+  it("persists an updated fusion plan for a stored interactive repository selection", async () => {
+    const workDir = await mkdtemp(join(tmpdir(), "kakashi-server-work-"));
+    const now = new Date().toISOString();
+    const requirement = requirementSpec();
+    const primaryAnalysis = repoAnalysis("open-source/primary", 1, "search", 0.92);
+    const auxiliaryAnalysis = repoAnalysis("open-source/auxiliary", 2, "search", 0.84);
+    const state: KakashiRunState = {
+      runId: "run-selection-api",
+      mode: "interactive",
+      stage: "waiting_for_confirmation",
+      requirementText: requirement.raw,
+      outputDir: resolve(workDir, "selection-out"),
+      createdAt: now,
+      updatedAt: now,
+      spec: requirement,
+      candidates: [primaryAnalysis.candidate, auxiliaryAnalysis.candidate],
+      analyses: [primaryAnalysis, auxiliaryAnalysis]
+    };
+    const statePath = join(workDir, ".kakashi", "runs", state.runId, "state.json");
+    await mkdir(dirname(statePath), { recursive: true });
+    await writeFile(statePath, JSON.stringify(state, null, 2), "utf8");
+
+    await withRunningServer(workDir, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/runs/${state.runId}/select-repositories`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedRepositories: [auxiliaryAnalysis.candidate.fullName] })
+      });
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as KakashiRunState;
+      expect(body.plan?.main.repo.fullName).toBe(auxiliaryAnalysis.candidate.fullName);
+    });
+
+    const saved = JSON.parse(await readFile(statePath, "utf8")) as KakashiRunState;
+    expect(saved.plan?.main.repo.fullName).toBe(auxiliaryAnalysis.candidate.fullName);
+    expect(saved.graph?.repos.map((analysis) => analysis.candidate.fullName)).toEqual([auxiliaryAnalysis.candidate.fullName]);
+  });
+
   it("returns 404 instead of opening an empty event stream for a missing run", async () => {
     const workDir = await mkdtemp(join(tmpdir(), "kakashi-server-work-"));
 
@@ -228,4 +317,84 @@ async function waitForHealth(
 
 function tail(value: string): string {
   return value.trim().slice(-4_000);
+}
+
+function requirementSpec(): RequirementSpec {
+  return {
+    raw: "Build a searchable developer tool",
+    goal: "Build a searchable developer tool",
+    target: "web",
+    preferredStack: ["TypeScript"],
+    constraints: [],
+    capabilities: [
+      {
+        id: "search",
+        name: "Repository Search",
+        description: "Search and rank repository content",
+        keywords: ["search", "rank"],
+        required: true
+      }
+    ]
+  };
+}
+
+function repoAnalysis(fullName: string, id: number, capabilityId: string, confidence: number): RepoAnalysis {
+  const candidate = repoCandidate(fullName, id);
+  return {
+    candidate,
+    localPath: `/tmp/kakashi-sources/${candidate.name}`,
+    stack: ["TypeScript"],
+    packageManagers: ["pnpm"],
+    manifests: ["package.json"],
+    commands: [
+      {
+        name: "test",
+        command: "pnpm test",
+        source: "package.json",
+        purpose: "test"
+      }
+    ],
+    modules: [
+      {
+        path: "src/index.ts",
+        kind: "source",
+        summary: "Core implementation"
+      }
+    ],
+    readmeSummary: `${fullName} README summary`,
+    capabilityMatches: [
+      {
+        capabilityId,
+        capabilityName: "Repository Search",
+        confidence,
+        evidence: [`${fullName} implements search`]
+      }
+    ],
+    risks: []
+  };
+}
+
+function repoCandidate(fullName: string, id: number): RepoCandidate {
+  const [owner, name] = fullName.split("/");
+  return {
+    id,
+    fullName,
+    owner: owner ?? "open-source",
+    name: name ?? fullName,
+    htmlUrl: `https://github.com/${fullName}`,
+    cloneUrl: `https://github.com/${fullName}.git`,
+    defaultBranch: "main",
+    description: `${fullName} description`,
+    stars: id * 100,
+    forks: id * 10,
+    openIssues: 0,
+    language: "TypeScript",
+    license: "MIT",
+    updatedAt: "2026-06-17T00:00:00.000Z",
+    pushedAt: "2026-06-17T00:00:00.000Z",
+    archived: false,
+    fork: false,
+    score: 1,
+    matchedCapabilities: ["search"]
+  };
 }

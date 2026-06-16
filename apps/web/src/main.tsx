@@ -78,6 +78,10 @@ function App() {
   const [allowCopyleft, setAllowCopyleft] = useState(false);
   const [force, setForce] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [selectedRepositories, setSelectedRepositories] = useState<string[]>([]);
+  const [selectionSnapshotKey, setSelectionSnapshotKey] = useState("");
+  const [selectionBusy, setSelectionBusy] = useState(false);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
 
   useEffect(() => {
     void refreshRuns();
@@ -111,6 +115,36 @@ function App() {
       edges: graph.edges.filter((edge) => edge.capabilityId === capability.id).slice(0, 3)
     }));
   }, [active]);
+
+  const plannedRepositories = useMemo(() => (active ? getPlannedRepositories(active) : []), [active]);
+  const selectedRepositorySet = useMemo(() => new Set(selectedRepositories), [selectedRepositories]);
+  const canSelectRepositories = active?.mode === "interactive" && active.stage === "waiting_for_confirmation";
+  const hasCandidateSelection = canSelectRepositories && (active?.candidates?.length ?? 0) > 0;
+  const selectionDirty = hasCandidateSelection && !sameRepositorySelection(selectedRepositories, plannedRepositories);
+  const executeDisabled = hasCandidateSelection && (selectedRepositories.length === 0 || selectionDirty || selectionBusy);
+
+  useEffect(() => {
+    if (!active) {
+      setSelectedRepositories([]);
+      setSelectionSnapshotKey("");
+      setSelectionError(null);
+      return;
+    }
+    const candidates = active.candidates ?? [];
+    if (candidates.length === 0) {
+      setSelectedRepositories([]);
+      setSelectionSnapshotKey(`${active.runId}:empty`);
+      setSelectionError(null);
+      return;
+    }
+    const planned = getPlannedRepositories(active);
+    const nextSelection = planned.length > 0 ? planned : candidates.map((repo) => repo.fullName);
+    const nextKey = `${active.runId}:${candidates.map((repo) => repo.fullName).join("|")}:${planned.join("|")}`;
+    if (nextKey === selectionSnapshotKey) return;
+    setSelectedRepositories(nextSelection);
+    setSelectionSnapshotKey(nextKey);
+    setSelectionError(null);
+  }, [active, selectionSnapshotKey]);
 
   async function refreshRuns() {
     const response = await fetch("/api/runs");
@@ -160,6 +194,32 @@ function App() {
       body: JSON.stringify({ confirmed })
     });
     await loadRun(active.runId);
+  }
+
+  async function updateSelectedRepositories() {
+    if (!active || selectedRepositories.length === 0) return;
+    setSelectionBusy(true);
+    setSelectionError(null);
+    const response = await fetch(`/api/runs/${active.runId}/select-repositories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selectedRepositories })
+    });
+    setSelectionBusy(false);
+    const body = (await response.json()) as RunState | { error?: string };
+    if (!response.ok) {
+      setSelectionError("error" in body && body.error ? body.error : "Could not update the fusion plan.");
+      return;
+    }
+    setActive(body as RunState);
+    await refreshRuns();
+  }
+
+  function toggleRepository(fullName: string, checked: boolean) {
+    setSelectedRepositories((current) => {
+      if (checked) return Array.from(new Set([...current, fullName]));
+      return current.filter((repo) => repo !== fullName);
+    });
   }
 
   async function cancelRun() {
@@ -277,14 +337,40 @@ function App() {
 
             <section className="panel-grid">
               <Panel title="Candidate Repositories" icon={<GitBranch size={18} />}>
+                {hasCandidateSelection && (
+                  <div className="selection-toolbar">
+                    <span>
+                      {selectedRepositories.length}/{active.candidates?.length ?? 0} selected
+                    </span>
+                    <button
+                      className="secondary"
+                      onClick={() => void updateSelectedRepositories()}
+                      disabled={!selectionDirty || selectedRepositories.length === 0 || selectionBusy}
+                    >
+                      {selectionBusy ? <RefreshCw size={15} className="spin" /> : <RefreshCw size={15} />}
+                      Update plan
+                    </button>
+                  </div>
+                )}
+                {selectionError && <p className="error-text">{selectionError}</p>}
                 <div className="table">
                   {(active.candidates ?? []).map((repo) => (
-                    <a className="repo-row" href={repo.htmlUrl} target="_blank" rel="noreferrer" key={repo.fullName}>
-                      <strong>{repo.fullName}</strong>
+                    <div className={canSelectRepositories ? "repo-row selectable" : "repo-row"} key={repo.fullName}>
+                      {canSelectRepositories && (
+                        <input
+                          aria-label={`Use ${repo.fullName}`}
+                          type="checkbox"
+                          checked={selectedRepositorySet.has(repo.fullName)}
+                          onChange={(event) => toggleRepository(repo.fullName, event.target.checked)}
+                        />
+                      )}
+                      <a href={repo.htmlUrl} target="_blank" rel="noreferrer">
+                        <strong>{repo.fullName}</strong>
+                      </a>
                       <span>{repo.language ?? "unknown"}</span>
                       <span>{repo.license ?? "no license"}</span>
                       <span>{repo.stars} stars</span>
-                    </a>
+                    </div>
                   ))}
                   {(active.candidates ?? []).length === 0 && <p className="muted">Candidates will appear after GitHub search completes.</p>}
                 </div>
@@ -326,7 +412,7 @@ function App() {
                     </ol>
                     {active.stage === "waiting_for_confirmation" && (
                       <div className="actions">
-                        <button className="primary" onClick={() => void confirmPlan(true)}>
+                        <button className="primary" disabled={executeDisabled} onClick={() => void confirmPlan(true)}>
                           Execute
                         </button>
                         <button onClick={() => void confirmPlan(false)}>Cancel</button>
@@ -370,6 +456,18 @@ function Status({ stage }: { stage: RunStage }) {
 
 function isTerminalStage(stage: RunStage): boolean {
   return stage === "completed" || stage === "failed" || stage === "cancelled";
+}
+
+function getPlannedRepositories(run: RunState): string[] {
+  if (!run.plan) return [];
+  return [run.plan.main.repo.fullName, ...run.plan.auxiliaries.map((source) => source.repo.fullName)];
+}
+
+function sameRepositorySelection(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  const normalizedLeft = [...left].sort();
+  const normalizedRight = [...right].sort();
+  return normalizedLeft.every((value, index) => value === normalizedRight[index]);
 }
 
 function Panel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {

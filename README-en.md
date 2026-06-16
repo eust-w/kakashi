@@ -20,7 +20,7 @@ Describe the software you want in one sentence. Kakashi searches real GitHub rep
 - Real Codex modification: runs local `codex exec` instead of simulated success paths.
 - Real verification loop: runs install, lint, build, test, CLI help, or server readiness checks; when server output exposes a local URL, Kakashi performs a real HTTP probe and falls back to common health endpoints.
 - Cancellable execution: CLI/Web background commands accept cancellation and terminate git, Codex, and verifier subprocesses.
-- Local Web UI: supports auto/interactive modes, repository count, repair iterations, copyleft policy, overwrite behavior, and run cancellation.
+- Local Web UI: supports auto/interactive modes, candidate repository selection, fusion-plan rebuilds, repair iterations, copyleft policy, overwrite behavior, and run cancellation.
 - Provenance and license tracking: exports `SOURCE_PROVENANCE.json`, `KAKASHI_REPORT.md`, and copied source license files.
 
 ## Why Kakashi
@@ -285,7 +285,7 @@ pnpm kakashi serve --web-dir apps/web/dist --port 4317
 
 Open `http://127.0.0.1:4317/`.
 
-The Web UI does not have a separate API key configuration. It uses the same environment and PATH as the Kakashi server process. The Web UI can configure run mode, candidate repository count, repair iterations, copyleft policy, overwrite behavior, and cancellation for active runs. In the same terminal, verify:
+The Web UI does not have a separate API key configuration. It uses the same environment and PATH as the Kakashi server process. The Web UI can configure run mode, candidate repository count, repair iterations, copyleft policy, overwrite behavior, and cancellation for active runs. When an interactive run reaches confirmation, you can select which candidate repositories may participate, click `Update plan` to rebuild the capability graph and fusion plan from analyzed repositories, and then execute the displayed plan. In the same terminal, verify:
 
 ```bash
 gh auth status

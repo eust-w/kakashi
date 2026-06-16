@@ -20,7 +20,7 @@ Kakashi（复制忍者）是在 Codex CLI / Codex Desktop 之上构建的 GitHub
 - 真实 Codex 改造：调用本机 `codex exec`，不使用模拟成功路径。
 - 真实验证闭环：自动运行 install、lint、build、test、CLI help 或 server readiness；服务日志暴露本地 URL 时会发起真实 HTTP 探测，并回退检查常见健康端点。
 - 可中止执行：CLI/Web 后台命令支持取消信号，会终止 git、Codex 和 verifier 子进程。
-- 本地 Web UI：支持自动/交互模式、仓库数量、修复轮数、copyleft 策略、覆盖输出和取消运行。
+- 本地 Web UI：支持自动/交互模式、候选仓库选择、融合计划重算、修复轮数、copyleft 策略、覆盖输出和取消运行。
 - 来源与许可证追踪：生成 `SOURCE_PROVENANCE.json`、`KAKASHI_REPORT.md` 和来源仓库许可证副本。
 
 ## 为什么是 Kakashi
@@ -285,7 +285,7 @@ pnpm kakashi serve --web-dir apps/web/dist --port 4317
 
 打开 `http://127.0.0.1:4317/`。
 
-网页版不需要单独的 API Key 配置。它使用启动 Kakashi server 的同一个系统环境和 PATH。Web UI 可以设置运行模式、候选仓库数量、修复轮数、copyleft 策略和是否覆盖输出目录，也可以取消正在运行的任务。先在同一个终端里确认：
+网页版不需要单独的 API Key 配置。它使用启动 Kakashi server 的同一个系统环境和 PATH。Web UI 可以设置运行模式、候选仓库数量、修复轮数、copyleft 策略和是否覆盖输出目录，也可以取消正在运行的任务。交互式运行进入确认阶段后，可以勾选允许参与融合的候选仓库，点击 `Update plan` 让 server 基于已分析仓库重建能力图谱和融合计划，然后再执行当前显示的计划。先在同一个终端里确认：
 
 ```bash
 gh auth status

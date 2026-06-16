@@ -9,6 +9,7 @@ export * from "./repo-manager";
 export * from "./repo-analyzer";
 export * from "./capability-graph";
 export * from "./fusion-planner";
+export * from "./interactive-selection";
 export * from "./codex-executor";
 export * from "./verifier";
 export * from "./gap-detector";
