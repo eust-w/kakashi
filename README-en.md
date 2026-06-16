@@ -105,9 +105,9 @@ Windows PowerShell:
 
 Every completed run writes:
 
-- `KAKASHI_REPORT.md`: full process report.
+- `KAKASHI_REPORT.md`: full process report, including warn/error run events such as skipped candidates and verification failures.
 - `SOURCE_PROVENANCE.json`: source repositories, capability matches, and source references.
-- `.kakashi/run-report.json`: machine-readable run record.
+- `.kakashi/run-report.json`: machine-readable run record with `runEvents`, capability graph, Codex results, and verifier results.
 - `.kakashi/licenses/`: copied source repository licenses.
 
 ## Configuration

@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
@@ -9,7 +9,7 @@ import { CodexExecutor } from "./codex-executor";
 import { Exporter } from "./exporter";
 import { RepoManager } from "./repo-manager";
 import { Verifier } from "./verifier";
-import type { FusionPlan, RepoCandidate } from "./types";
+import type { CodexResult, FusionPlan, RepoCandidate, RunReport, VerificationResult } from "./types";
 
 const execFileAsync = promisify(execFile);
 const originalPath = process.env.PATH;
@@ -84,6 +84,49 @@ describe("KakashiOrchestrator", () => {
     });
   });
 
+  it("exports skipped candidate warnings into the final machine report", async () => {
+    const root = await mkdtemp(join(tmpdir(), "kakashi-orchestrator-"));
+    const validRemote = await createVerifiableRemote(root);
+    const badCandidate = makeCandidate(validRemote);
+    const goodCandidate = {
+      ...makeCandidate(validRemote),
+      id: 2,
+      fullName: "local/good-source",
+      name: "good-source"
+    };
+    badCandidate.fullName = "local/broken-source";
+    badCandidate.name = "broken-source";
+    badCandidate.defaultBranch = "missing-branch";
+    const outputDir = join(root, "output");
+    const orchestrator = new KakashiOrchestrator({
+      workDir: root,
+      outputDir,
+      cacheDir: join(root, "cache"),
+      commandTimeoutMs: 30_000,
+      force: false,
+      services: {
+        searcher: {
+          search: async () => [badCandidate, goodCandidate]
+        },
+        codex: successfulCodex(),
+        verifier: successfulVerifier()
+      }
+    });
+
+    const finalState = await orchestrator.run("Build a TypeScript CLI with tests", "auto");
+
+    expect(finalState.stage).toBe("completed");
+    const machineReport = JSON.parse(await readFile(join(outputDir, ".kakashi", "run-report.json"), "utf8")) as RunReport;
+    expect(machineReport.runEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warn",
+          message: expect.stringContaining("Skipped local/broken-source")
+        })
+      ])
+    );
+  });
+
   it("fails the run when Codex exits non-zero even if the cloned project verifies", async () => {
     const root = await mkdtemp(join(tmpdir(), "kakashi-orchestrator-"));
     const remote = await createVerifiableRemote(root);
@@ -145,6 +188,60 @@ function makeCandidate(cloneUrl: string): RepoCandidate {
     fork: false,
     score: 0,
     matchedCapabilities: ["working-project"]
+  };
+}
+
+function successfulCodex(): { execute: () => Promise<CodexResult> } {
+  return {
+    execute: async () => ({
+      ok: true,
+      exitCode: 0,
+      finalMessage: JSON.stringify({
+        summary: "No code changes were required for this verification fixture.",
+        changedFiles: [],
+        verificationNotes: "Fixture Codex service completed.",
+        blockers: []
+      }),
+      events: [],
+      result: {
+        command: "codex exec",
+        cwd: "",
+        exitCode: 0,
+        signal: null,
+        stdout: "",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+        aborted: false
+      }
+    })
+  };
+}
+
+function successfulVerifier(): { verify: (projectDir: string) => Promise<VerificationResult> } {
+  return {
+    verify: async (projectDir: string) => ({
+      ok: true,
+      summary: "Verification passed 1 detected step(s).",
+      steps: [
+        {
+          name: "fixture verify",
+          command: "node -e true",
+          ok: true,
+          result: {
+            command: "node -e true",
+            cwd: projectDir,
+            exitCode: 0,
+            signal: null,
+            stdout: "",
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+            aborted: false
+          }
+        }
+      ]
+    })
   };
 }
 

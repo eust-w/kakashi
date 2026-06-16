@@ -1,6 +1,6 @@
 import { copyFile, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import type { FusionPlan, RunReport, VerificationResult, CodexResult } from "./types";
+import type { FusionPlan, RunReport, VerificationResult, CodexResult, RunEvent } from "./types";
 import { ensureDir, pathExists, writeJsonFile } from "./utils/fs";
 import { slugify } from "./utils/ids";
 import { redactObject, redactSecrets } from "./utils/redaction";
@@ -11,7 +11,8 @@ export class Exporter {
     plan: FusionPlan,
     verification: VerificationResult,
     codexRuns: CodexResult[],
-    verificationAttempts: VerificationResult[] = [verification]
+    verificationAttempts: VerificationResult[] = [verification],
+    runEvents: RunEvent[] = []
   ): Promise<RunReport> {
     const report = redactObject<RunReport>({
       runId,
@@ -20,6 +21,7 @@ export class Exporter {
       verification,
       verificationAttempts,
       codexRuns,
+      runEvents,
       outputDir: plan.outputDir,
       completedAt: new Date().toISOString()
     });
@@ -157,6 +159,11 @@ export class Exporter {
       })
       .join("\n\n");
 
+    const runEvents = report.runEvents
+      .filter((event) => event.level !== "info")
+      .map((event) => `- ${event.timestamp} ${event.level.toUpperCase()} ${event.stage}: ${event.message}`)
+      .join("\n");
+
     const codexIterations = report.codexRuns
       .map((run, index) => {
         const parsed = parseCodexFinalMessage(run.finalMessage);
@@ -241,12 +248,16 @@ export class Exporter {
       "",
       verificationAttempts || "- 未记录验证尝试。 / No verification attempts were recorded.",
       "",
+      `## 运行事件 / Run Events`,
+      "",
+      runEvents || "- 没有 warn/error 事件。 / No warn/error events were recorded.",
+      "",
       `## 导出产物 / Exported Artifacts`,
       "",
       "- `README.md`: 生成项目的使用说明和 Kakashi 摘要。 / Generated project usage notes plus Kakashi summary.",
       "- `KAKASHI_REPORT.md`: 当前这份人类可读的完整流程报告。 / This human-readable full process report.",
       "- `SOURCE_PROVENANCE.json`: 源仓库来源和选中能力元数据。 / Source repository provenance and selected capability metadata.",
-      "- `.kakashi/run-report.json`: 机器可读的运行状态、图谱、Codex 结果和 verifier 结果。 / Machine-readable run state, graph, Codex results, and verifier results.",
+      "- `.kakashi/run-report.json`: 机器可读的运行状态、图谱、事件、Codex 结果和 verifier 结果。 / Machine-readable run state, graph, events, Codex results, and verifier results.",
       "- `.kakashi/licenses/`: 选中源仓库的许可证文件副本。 / Copied license files from selected source repositories when present."
     ].join("\n");
     await writeFileSafe(join(report.outputDir, "KAKASHI_REPORT.md"), content);

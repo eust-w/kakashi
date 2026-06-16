@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { Exporter } from "./exporter";
-import type { CodexResult, FusionPlan, RepoAnalysis, RepoCandidate, VerificationResult } from "./types";
+import type { CodexResult, FusionPlan, RepoAnalysis, RepoCandidate, RunEvent, VerificationResult } from "./types";
 
 const candidate: RepoCandidate = {
   id: 1,
@@ -75,6 +75,14 @@ describe("Exporter", () => {
     const accessToken = "codex-access-token-12345";
     const plan = createPlan(outputDir, `Build a dashboard with token: ${secret}`);
     const verification = createVerification(outputDir, `Verification used password: ${secret}`);
+    const runEvent: RunEvent = {
+      id: "event_secret",
+      runId: "run_test",
+      timestamp: "2026-06-17T00:00:00.000Z",
+      stage: "executing",
+      level: "warn",
+      message: `Retrying request with api_key: ${secret} and Authorization: Bearer ${accessToken}`
+    };
     const codexRun: CodexResult = {
       ok: true,
       exitCode: 0,
@@ -98,7 +106,7 @@ describe("Exporter", () => {
       }
     };
 
-    const returnedReport = await new Exporter().exportReport("run_test", plan, verification, [codexRun], [verification]);
+    const returnedReport = await new Exporter().exportReport("run_test", plan, verification, [codexRun], [verification], [runEvent]);
 
     const markdownReport = await readFile(join(outputDir, "KAKASHI_REPORT.md"), "utf8");
     const machineReport = await readFile(join(outputDir, ".kakashi", "run-report.json"), "utf8");
@@ -110,6 +118,31 @@ describe("Exporter", () => {
       expect(content).not.toContain(secret);
       expect(content).not.toContain(accessToken);
     }
+  });
+
+  it("includes important run events in machine and markdown reports", async () => {
+    const outputDir = await mkdtemp(join(tmpdir(), "kakashi-export-"));
+    const plan = createPlan(outputDir);
+    const verification = createVerification(outputDir);
+    const runEvent: RunEvent = {
+      id: "event_1",
+      runId: "run_test",
+      timestamp: "2026-06-17T00:00:00.000Z",
+      stage: "analyzing",
+      level: "warn",
+      message: "Skipped example/broken-source: Failed to clone example/broken-source."
+    };
+
+    await new Exporter().exportReport("run_test", plan, verification, [], [verification], [runEvent]);
+
+    const markdownReport = await readFile(join(outputDir, "KAKASHI_REPORT.md"), "utf8");
+    const machineReport = JSON.parse(await readFile(join(outputDir, ".kakashi", "run-report.json"), "utf8")) as {
+      runEvents?: RunEvent[];
+    };
+
+    expect(machineReport.runEvents).toEqual([runEvent]);
+    expect(markdownReport).toContain("## 运行事件 / Run Events");
+    expect(markdownReport).toContain("WARN analyzing: Skipped example/broken-source");
   });
 });
 

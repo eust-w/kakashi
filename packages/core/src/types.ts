@@ -204,6 +204,7 @@ export interface RunReport {
   verification: VerificationResult;
   verificationAttempts: VerificationResult[];
   codexRuns: CodexResult[];
+  runEvents: RunEvent[];
   outputDir: string;
   completedAt: string;
 }

@@ -105,9 +105,9 @@ Windows PowerShell:
 
 每次完整运行会在生成项目中写入：
 
-- `KAKASHI_REPORT.md`：完整流程报告。
+- `KAKASHI_REPORT.md`：完整流程报告，包含候选跳过、验证失败等 warn/error 运行事件。
 - `SOURCE_PROVENANCE.json`：来源仓库、能力匹配和源码引用。
-- `.kakashi/run-report.json`：机器可读运行记录。
+- `.kakashi/run-report.json`：机器可读运行记录，包含 `runEvents`、能力图谱、Codex 结果和 verifier 结果。
 - `.kakashi/licenses/`：来源仓库许可证副本。
 
 ## 配置

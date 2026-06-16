@@ -70,7 +70,8 @@ export interface OrchestratorServices {
       plan: FusionPlan,
       verification: VerificationResult,
       codexRuns: CodexResult[],
-      verificationAttempts: VerificationResult[]
+      verificationAttempts: VerificationResult[],
+      runEvents: RunEvent[]
     ): Promise<RunReport>;
   };
 }
@@ -185,7 +186,8 @@ export class KakashiOrchestrator {
     }
 
     await this.emit(state, "exporting", "info", "Writing provenance and verification reports.");
-    const report = await (await this.getExporter()).exportReport(state.runId, plan, verification, codexRuns, verificationAttempts);
+    const runEvents = await this.store.events(state.runId);
+    const report = await (await this.getExporter()).exportReport(state.runId, plan, verification, codexRuns, verificationAttempts, runEvents);
     const completed: KakashiRunState = {
       ...state,
       stage: verification.ok ? "completed" : "failed",
