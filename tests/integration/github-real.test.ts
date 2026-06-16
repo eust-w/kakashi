@@ -18,8 +18,11 @@ describe.runIf(process.env.RUN_REAL_INTEGRATION === "1")("real GitHub repository
       });
     } catch (error) {
       if (isKakashiError(error) && error.code === "GITHUB_RATE_LIMITED") {
-        console.warn(error.message);
-        return;
+        throw new Error(
+          "Real GitHub integration did not complete because GitHub rate-limited the search request. " +
+            "Set GITHUB_TOKEN/GH_TOKEN with a valid token or rerun after the rate limit resets.",
+          { cause: error }
+        );
       }
       throw error;
     }

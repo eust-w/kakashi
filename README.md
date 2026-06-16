@@ -379,7 +379,7 @@ RUN_REAL_INTEGRATION=1 pnpm test:integration
 RUN_CODEX_INTEGRATION=1 pnpm test:codex
 ```
 
-集成检查会使用真实 GitHub/Codex 命令，需要网络访问和有效的本地认证。
+集成检查会使用真实 GitHub/Codex 命令，需要网络访问和有效的本地认证。开启 `RUN_REAL_INTEGRATION=1` 后，GitHub 认证缺失、API rate limit 或网络不可用都会让测试失败，而不是被当成通过。
 
 ## 贡献
 

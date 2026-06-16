@@ -56,4 +56,12 @@ describe("open-source project health", () => {
     expect(release).toContain("Verify built CLI assets");
     expect(release).toContain("pnpm verify:release-assets");
   });
+
+  it("does not let real integration checks pass when GitHub cannot be queried", async () => {
+    const githubIntegration = await readFile("tests/integration/github-real.test.ts", "utf8");
+
+    expect(githubIntegration).not.toMatch(
+      /if\s*\(\s*isKakashiError\(error\)\s*&&\s*error\.code\s*===\s*"GITHUB_RATE_LIMITED"\s*\)\s*{[^}]*\breturn\s*;/
+    );
+  });
 });

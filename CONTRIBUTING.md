@@ -35,6 +35,8 @@ RUN_REAL_INTEGRATION=1 pnpm test:integration
 RUN_CODEX_INTEGRATION=1 pnpm test:codex
 ```
 
+开启真实集成测试后，GitHub 认证缺失、API rate limit、网络不可用或 Codex 不可用都应视为失败，而不是通过或 smoke 结果。
+
 ## Pull Request 要求
 
 - 不要提交 API Key、GitHub token、Codex access token、日志中的密钥或生成项目中的私密文件。

@@ -379,7 +379,7 @@ RUN_REAL_INTEGRATION=1 pnpm test:integration
 RUN_CODEX_INTEGRATION=1 pnpm test:codex
 ```
 
-The integration checks use real GitHub/Codex commands. They require network access and valid local authentication.
+The integration checks use real GitHub/Codex commands. They require network access and valid local authentication. Once `RUN_REAL_INTEGRATION=1` is enabled, missing GitHub auth, API rate limits, or unavailable network access fail the test instead of being treated as success.
 
 ## Contributing
 
