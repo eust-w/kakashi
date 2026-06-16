@@ -220,6 +220,67 @@ describe("Verifier", () => {
     ]);
   });
 
+  it("detects nested monorepo verification commands with real working directories", async () => {
+    const dir = join(tmpdir(), `kakashi-verifier-${randomUUID()}`);
+    await mkdir(join(dir, "apps", "web"), { recursive: true });
+    await mkdir(join(dir, "services", "api", "tests"), { recursive: true });
+    await mkdir(join(dir, "services", "worker"), { recursive: true });
+    await mkdir(join(dir, "crates", "tool"), { recursive: true });
+    await writeFile(
+      join(dir, "apps", "web", "package.json"),
+      JSON.stringify({
+        packageManager: "pnpm@10.33.0",
+        scripts: {
+          build: "vite build",
+          test: "vitest run"
+        }
+      }),
+      "utf8"
+    );
+    await writeFile(join(dir, "services", "api", "requirements.txt"), "pytest\n", "utf8");
+    await writeFile(join(dir, "services", "worker", "go.mod"), "module example.com/worker\n", "utf8");
+    await writeFile(join(dir, "crates", "tool", "Cargo.toml"), "[package]\nname='tool'\nversion='0.1.0'\nedition='2021'\n", "utf8");
+
+    const steps = await new Verifier().detect(dir);
+
+    expect(steps).toEqual([
+      { name: "apps/web pnpm install", command: ["pnpm", "install"], cwd: "apps/web", required: true },
+      { name: "apps/web pnpm build", command: ["pnpm", "run", "build"], cwd: "apps/web", required: true },
+      { name: "apps/web pnpm test", command: ["pnpm", "run", "test"], cwd: "apps/web", required: true },
+      {
+        name: "services/api pip install requirements",
+        command: ["python3", "-m", "pip", "install", "-r", "requirements.txt"],
+        cwd: "services/api",
+        required: true
+      },
+      { name: "services/api pytest", command: ["python3", "-m", "pytest"], cwd: "services/api", required: true },
+      { name: "services/worker go test", command: ["go", "test", "./..."], cwd: "services/worker", required: true },
+      { name: "services/worker go build", command: ["go", "build", "./..."], cwd: "services/worker", required: true },
+      { name: "crates/tool cargo test", command: ["cargo", "test"], cwd: "crates/tool", required: true },
+      { name: "crates/tool cargo build", command: ["cargo", "build"], cwd: "crates/tool", required: true }
+    ]);
+  });
+
+  it("runs nested verification commands from the nested project directory", async () => {
+    const dir = join(tmpdir(), `kakashi-verifier-${randomUUID()}`);
+    await mkdir(join(dir, "apps", "web"), { recursive: true });
+    await writeFile(
+      join(dir, "apps", "web", "package.json"),
+      JSON.stringify({
+        scripts: {
+          test: "node -e \"process.exit(process.cwd().endsWith('apps/web') ? 0 : 9)\""
+        }
+      }),
+      "utf8"
+    );
+
+    const result = await new Verifier().verify(dir, 30_000);
+
+    expect(result.ok).toBe(true);
+    expect(result.steps.map((step) => step.name)).toEqual(["apps/web npm install", "apps/web npm test"]);
+    expect(result.steps.at(-1)?.result.cwd).toBe(join(dir, "apps", "web"));
+  });
+
   it("uses editable Python installs when only pyproject.toml is present", async () => {
     const dir = join(tmpdir(), `kakashi-verifier-${randomUUID()}`);
     await mkdir(dir, { recursive: true });

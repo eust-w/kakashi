@@ -5,6 +5,7 @@ import { resolveGitHubToken } from "./github-auth";
 import { isAllowedLicense } from "./license-policy";
 import { runCommand } from "./utils/command";
 import { explainRepositoryScore, meaningfulTermsForSpec, normalizeTerms } from "./repository-score";
+import { isTransientNetworkError } from "./utils/network-errors";
 
 export interface GitHubSearchOptions {
   cwd: string;
@@ -206,9 +207,4 @@ function isRateLimited(error: unknown): boolean {
   if (status !== 403 && status !== 429) return false;
   const message = "message" in error ? String((error as { message?: unknown }).message) : "";
   return /rate limit|secondary rate limit/i.test(message);
-}
-
-function isTransientNetworkError(error: unknown): boolean {
-  const text = error instanceof Error ? `${error.message} ${(error as { cause?: unknown }).cause ?? ""}` : String(error);
-  return /fetch failed|connect timeout|econnreset|etimedout|socket disconnected|network/i.test(text);
 }

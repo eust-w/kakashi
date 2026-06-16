@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { explainRepositoryScore } from "./repository-score";
 import type { RequirementSpec } from "./types";
+import { isTransientNetworkError } from "./utils/network-errors";
 
 const spec: RequirementSpec = {
   raw: "Build a TypeScript dashboard with tests",
@@ -42,5 +43,16 @@ describe("explainRepositoryScore", () => {
     expect(explanation.breakdown.stackBoost).toBeGreaterThan(0);
     expect(explanation.reason).toContain("direct term hits");
     expect(explanation.reason).toContain("stack match");
+  });
+});
+
+describe("isTransientNetworkError", () => {
+  it("treats GitHub API server errors as transient so gh fallback can run", () => {
+    expect(
+      isTransientNetworkError({
+        status: 500,
+        message: "GET /search/repositories - 500 with id UNKNOWN"
+      })
+    ).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import { readFile, readdir } from "node:fs/promises";
-import { dirname, join, relative, sep } from "node:path";
+import { dirname, join, relative } from "node:path";
 import type {
   Capability,
   RepoAnalysis,
@@ -9,6 +9,7 @@ import type {
   RepoModule
 } from "./types";
 import { pathExists, readJsonFile } from "./utils/fs";
+import { discoverManifests } from "./utils/manifest-discovery";
 
 interface PackageJson {
   scripts?: Record<string, string>;
@@ -18,31 +19,6 @@ interface PackageJson {
 }
 
 const README_NAMES = ["README.md", "README.MD", "readme.md", "README", "docs/README.md"];
-const MANIFEST_NAMES = new Set([
-  "package.json",
-  "pnpm-lock.yaml",
-  "yarn.lock",
-  "package-lock.json",
-  "pyproject.toml",
-  "requirements.txt",
-  "go.mod",
-  "Cargo.toml",
-  "Gemfile",
-  "composer.json",
-  "Dockerfile"
-]);
-const SKIPPED_SCAN_DIRS = new Set([
-  ".git",
-  ".kakashi",
-  ".cache",
-  ".next",
-  ".turbo",
-  "build",
-  "coverage",
-  "dist",
-  "node_modules"
-]);
-const MAX_MANIFEST_SCAN_DEPTH = 3;
 
 export class RepoAnalyzer {
   async analyze(candidate: RepoCandidate, localPath: string, capabilities: Capability[]): Promise<RepoAnalysis> {
@@ -70,9 +46,7 @@ export class RepoAnalyzer {
   }
 
   private async detectManifests(localPath: string): Promise<string[]> {
-    const found: string[] = [];
-    await collectManifests(localPath, localPath, 0, found);
-    return found.sort((a, b) => manifestSortKey(a).localeCompare(manifestSortKey(b)));
+    return await discoverManifests(localPath);
   }
 
   private async readReadme(localPath: string): Promise<string> {
@@ -242,25 +216,6 @@ function classifyScript(name: string, script: string): RepoCommand["purpose"] {
   if (name === "start") return "start";
   if (name === "dev" || /\bdev\b/.test(text)) return "dev";
   return "other";
-}
-
-async function collectManifests(rootPath: string, dir: string, depth: number, found: string[]): Promise<void> {
-  if (depth > MAX_MANIFEST_SCAN_DEPTH) return;
-  const entries = await safeReadDirEntries(dir);
-  for (const entry of entries) {
-    const path = join(dir, entry.name);
-    if (entry.isFile() && MANIFEST_NAMES.has(entry.name)) {
-      found.push(relative(rootPath, path).split(sep).join("/"));
-      continue;
-    }
-    if (!entry.isDirectory() || SKIPPED_SCAN_DIRS.has(entry.name)) continue;
-    await collectManifests(rootPath, path, depth + 1, found);
-  }
-}
-
-function manifestSortKey(path: string): string {
-  const depth = path.split("/").length;
-  return `${String(depth).padStart(2, "0")}:${path}`;
 }
 
 async function detectNodeManagerForManifest(localPath: string, manifest: string, pkg: PackageJson): Promise<string> {

@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { VerificationResult, VerificationStep } from "./types";
 import { pathExists, readJsonFile } from "./utils/fs";
 import { runCommand } from "./utils/command";
+import { discoverManifests } from "./utils/manifest-discovery";
 
 interface PackageJson {
   name?: string;
@@ -18,23 +19,29 @@ const READINESS_TIMEOUT_MS = 30_000;
 
 export class Verifier {
   async detect(projectDir: string): Promise<VerificationStep[]> {
+    const manifests = await discoverManifests(projectDir);
     const steps: VerificationStep[] = [];
-    if (await pathExists(join(projectDir, "package.json"))) {
-      steps.push(...await this.detectNode(projectDir));
+    for (const manifest of manifests.filter((manifest) => manifest.endsWith("package.json"))) {
+      steps.push(...await this.detectNode(projectDir, manifest));
     }
-    if (await pathExists(join(projectDir, "pyproject.toml")) || await pathExists(join(projectDir, "requirements.txt"))) {
-      steps.push(...await this.detectPython(projectDir));
+
+    for (const packageDir of pythonProjectDirs(manifests)) {
+      steps.push(...await this.detectPython(projectDir, packageDir));
     }
-    if (await pathExists(join(projectDir, "go.mod"))) {
+
+    for (const manifest of manifests.filter((manifest) => manifest.endsWith("go.mod"))) {
+      const packageDir = dirname(manifest);
       steps.push(
-        { name: "go test", command: ["go", "test", "./..."], required: true },
-        { name: "go build", command: ["go", "build", "./..."], required: true }
+        scopedStep(packageDir, "go test", ["go", "test", "./..."]),
+        scopedStep(packageDir, "go build", ["go", "build", "./..."])
       );
     }
-    if (await pathExists(join(projectDir, "Cargo.toml"))) {
+
+    for (const manifest of manifests.filter((manifest) => manifest.endsWith("Cargo.toml"))) {
+      const packageDir = dirname(manifest);
       steps.push(
-        { name: "cargo test", command: ["cargo", "test"], required: true },
-        { name: "cargo build", command: ["cargo", "build"], required: true }
+        scopedStep(packageDir, "cargo test", ["cargo", "test"]),
+        scopedStep(packageDir, "cargo build", ["cargo", "build"])
       );
     }
     return steps;
@@ -53,7 +60,7 @@ export class Verifier {
     const results: VerificationResult["steps"] = [];
     for (const step of steps) {
       const result = await runCommand(step.command[0]!, step.command.slice(1), {
-        cwd: projectDir,
+        cwd: join(projectDir, step.cwd ?? "."),
         timeoutMs: step.mode === "readiness" ? Math.min(timeoutMs, READINESS_TIMEOUT_MS) : step.name.includes("install") ? Math.max(timeoutMs, 600_000) : timeoutMs,
         signal,
         readyPattern: step.mode === "readiness" ? SERVER_READY_PATTERN : undefined
@@ -79,30 +86,32 @@ export class Verifier {
     };
   }
 
-  private async detectNode(projectDir: string): Promise<VerificationStep[]> {
-    const pkg = await readJsonFile<PackageJson>(join(projectDir, "package.json"));
-    const manager = await detectNodeManager(projectDir, pkg);
+  private async detectNode(projectDir: string, manifest: string): Promise<VerificationStep[]> {
+    const packageDir = dirname(manifest);
+    const pkg = await readJsonFile<PackageJson>(join(projectDir, manifest));
+    const manager = await detectNodeManager(projectDir, packageDir, pkg);
     const scripts = pkg.scripts ?? {};
-    const steps: VerificationStep[] = [{ name: `${manager} install`, command: [manager, "install"], required: true }];
+    const steps: VerificationStep[] = [scopedStep(packageDir, `${manager} install`, [manager, "install"])];
 
     for (const script of ["lint", "build", "test"]) {
       if (isMeaningfulScript(scripts[script])) {
-        steps.push({ name: `${manager} ${script}`, command: [manager, "run", script], required: true });
+        steps.push(scopedStep(packageDir, `${manager} ${script}`, [manager, "run", script]));
       }
     }
 
     const binCommand = firstBinCommand(pkg);
     if (binCommand) {
-      steps.push({ name: `${binCommand.name} CLI help`, command: ["node", binCommand.path, "--help"], required: true });
+      steps.push(scopedStep(packageDir, `${binCommand.name} CLI help`, ["node", binCommand.path, "--help"]));
       return steps;
     }
 
     const runScript = selectRunnableServerScript(scripts, pkg);
     if (runScript) {
       steps.push({
-        name: `${manager} ${runScript} readiness`,
+        name: scopedName(packageDir, `${manager} ${runScript} readiness`),
         command: [manager, "run", runScript],
         required: true,
+        ...scopedCwd(packageDir),
         mode: "readiness"
       });
     }
@@ -110,20 +119,17 @@ export class Verifier {
     return steps;
   }
 
-  private async detectPython(projectDir: string): Promise<VerificationStep[]> {
+  private async detectPython(projectDir: string, packageDir: string): Promise<VerificationStep[]> {
+    const pythonDir = join(projectDir, packageDir);
     const steps: VerificationStep[] = [];
-    if (await pathExists(join(projectDir, "requirements.txt"))) {
-      steps.push({
-        name: "pip install requirements",
-        command: ["python3", "-m", "pip", "install", "-r", "requirements.txt"],
-        required: true
-      });
+    if (await pathExists(join(pythonDir, "requirements.txt"))) {
+      steps.push(scopedStep(packageDir, "pip install requirements", ["python3", "-m", "pip", "install", "-r", "requirements.txt"]));
     } else {
-      steps.push({ name: "pip install editable", command: ["python3", "-m", "pip", "install", "-e", "."], required: true });
+      steps.push(scopedStep(packageDir, "pip install editable", ["python3", "-m", "pip", "install", "-e", "."]));
     }
 
-    if (await containsFile(projectDir, "pytest.ini") || (await pathExists(join(projectDir, "tests")))) {
-      steps.push({ name: "pytest", command: ["python3", "-m", "pytest"], required: true });
+    if (await containsFile(pythonDir, "pytest.ini") || (await pathExists(join(pythonDir, "tests")))) {
+      steps.push(scopedStep(packageDir, "pytest", ["python3", "-m", "pytest"]));
     }
     return steps;
   }
@@ -136,10 +142,12 @@ export class Verifier {
   }
 }
 
-async function detectNodeManager(projectDir: string, pkg: PackageJson): Promise<string> {
+async function detectNodeManager(projectDir: string, packageDir: string, pkg: PackageJson): Promise<string> {
   if (pkg.packageManager) return pkg.packageManager.split("@")[0] ?? "npm";
-  if (await pathExists(join(projectDir, "pnpm-lock.yaml"))) return "pnpm";
-  if (await pathExists(join(projectDir, "yarn.lock"))) return "yarn";
+  if (await pathExists(join(projectDir, packageDir, "pnpm-lock.yaml"))) return "pnpm";
+  if (await pathExists(join(projectDir, packageDir, "yarn.lock"))) return "yarn";
+  if (packageDir !== "." && await pathExists(join(projectDir, "pnpm-lock.yaml"))) return "pnpm";
+  if (packageDir !== "." && await pathExists(join(projectDir, "yarn.lock"))) return "yarn";
   return "npm";
 }
 
@@ -198,4 +206,31 @@ async function containsFile(projectDir: string, name: string): Promise<boolean> 
   } catch {
     return false;
   }
+}
+
+function pythonProjectDirs(manifests: string[]): string[] {
+  const dirs = new Set<string>();
+  for (const manifest of manifests) {
+    if (manifest.endsWith("pyproject.toml") || manifest.endsWith("requirements.txt")) {
+      dirs.add(dirname(manifest));
+    }
+  }
+  return [...dirs];
+}
+
+function scopedStep(packageDir: string, label: string, command: string[]): VerificationStep {
+  return {
+    name: scopedName(packageDir, label),
+    command,
+    required: true,
+    ...scopedCwd(packageDir)
+  };
+}
+
+function scopedName(packageDir: string, label: string): string {
+  return packageDir === "." ? label : `${packageDir} ${label}`;
+}
+
+function scopedCwd(packageDir: string): Pick<VerificationStep, "cwd"> {
+  return packageDir === "." ? {} : { cwd: packageDir };
 }

@@ -163,6 +163,7 @@ export interface VerificationStep {
   name: string;
   command: string[];
   required: boolean;
+  cwd?: string;
   mode?: "exit" | "readiness";
 }
 
