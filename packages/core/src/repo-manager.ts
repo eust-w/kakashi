@@ -11,11 +11,7 @@ export class RepoManager {
     const repoDir = join(cacheDir, slugify(candidate.fullName));
 
     if (await pathExists(join(repoDir, ".git"))) {
-      await runCommand("git", ["-C", repoDir, "fetch", "--depth", "1", "origin", candidate.defaultBranch], {
-        cwd: cacheDir,
-        timeoutMs,
-        signal
-      });
+      await this.refreshCachedRepo(candidate, repoDir, cacheDir, timeoutMs, signal);
       return repoDir;
     }
 
@@ -37,7 +33,7 @@ export class RepoManager {
 
   async cloneMainToOutput(candidate: RepoCandidate, outputDir: string, timeoutMs: number, signal?: AbortSignal): Promise<void> {
     const parent = dirname(outputDir);
-    const result = await runCommand("git", ["clone", "--depth", "1", candidate.cloneUrl, outputDir], {
+    const result = await runCommand("git", ["clone", "--depth", "1", "--branch", candidate.defaultBranch, candidate.cloneUrl, outputDir], {
       cwd: parent,
       timeoutMs,
       signal
@@ -50,8 +46,11 @@ export class RepoManager {
   async cloneAuxiliary(candidate: RepoCandidate, sourcesDir: string, timeoutMs: number, signal?: AbortSignal): Promise<string> {
     await ensureDir(sourcesDir);
     const dest = join(sourcesDir, slugify(candidate.fullName));
-    if (await pathExists(join(dest, ".git"))) return dest;
-    const result = await runCommand("git", ["clone", "--depth", "1", candidate.cloneUrl, dest], {
+    if (await pathExists(join(dest, ".git"))) {
+      await this.refreshCachedRepo(candidate, dest, sourcesDir, timeoutMs, signal);
+      return dest;
+    }
+    const result = await runCommand("git", ["clone", "--depth", "1", "--branch", candidate.defaultBranch, candidate.cloneUrl, dest], {
       cwd: sourcesDir,
       timeoutMs,
       signal
@@ -60,5 +59,22 @@ export class RepoManager {
       throw new KakashiError("GIT_AUX_CLONE_FAILED", `Failed to clone auxiliary repo ${candidate.fullName}.`, result);
     }
     return dest;
+  }
+
+  private async refreshCachedRepo(
+    candidate: RepoCandidate,
+    repoDir: string,
+    cwd: string,
+    timeoutMs: number,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const result = await runCommand("git", ["-C", repoDir, "fetch", "--depth", "1", "origin", candidate.defaultBranch], {
+      cwd,
+      timeoutMs,
+      signal
+    });
+    if (result.exitCode !== 0) {
+      throw new KakashiError("GIT_FETCH_FAILED", `Failed to refresh cached repo ${candidate.fullName}.`, result);
+    }
   }
 }

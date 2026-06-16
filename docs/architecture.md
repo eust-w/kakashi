@@ -7,10 +7,12 @@ Kakashi is an orchestration layer above Codex CLI. It does not generate canned p
 1. `RequirementParser` converts the user request into a normalized goal, target, stack hints, constraints, and capability nodes.
 2. `GitHubSearcher` authenticates through `GITHUB_TOKEN`, `GH_TOKEN`, or `gh auth token`, then searches GitHub repositories with Octokit.
 3. `RepoManager` clones source repositories into `~/.cache/kakashi/repos`.
+   Cached repositories are refreshed with a real `git fetch` before reuse; refresh failures fail the run instead of silently using stale source code.
 4. `RepoAnalyzer` reads manifests, README files, scripts, modules, and source layout from real files.
 5. `CapabilityGraphBuilder` links capability nodes to repository evidence.
 6. `FusionPlanner` chooses a main repository and auxiliary repositories.
 7. `RepoManager` clones the main repository into the output directory and auxiliary repositories under `.kakashi/sources`.
+   Materialization uses the selected repository branch from GitHub metadata so the generated project matches the analyzed candidate.
 8. `CodexExecutor` invokes `codex exec` in the output directory with the fusion plan and source paths.
 9. `Verifier` detects package manager and project commands from manifests and runs install/build/test/lint/start checks.
 10. `GapDetector` extracts missing dependency/capability signals from real logs and can trigger another GitHub search iteration.

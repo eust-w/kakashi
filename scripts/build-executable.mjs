@@ -132,6 +132,11 @@ function targetConfig(name) {
 }
 
 async function getNodeExecutable(target) {
+  if (isHostTarget(target) && nodeVersion === process.versions.node && existsSync(process.execPath)) {
+    console.log(`use local Node runtime ${process.execPath}`);
+    return process.execPath;
+  }
+
   const platform = target.platform === "windows" ? "win" : target.platform;
   const archiveExt = target.platform === "windows" ? "zip" : "tar.gz";
   const packageName = `node-v${nodeVersion}-${platform}-${target.arch}`;
@@ -149,6 +154,11 @@ async function getNodeExecutable(target) {
     run("tar", ["-xf", archivePath, "-C", extractDir]);
   }
   return executable;
+}
+
+function isHostTarget(target) {
+  const hostPlatform = process.platform === "win32" ? "windows" : process.platform;
+  return target.platform === hostPlatform && target.arch === process.arch;
 }
 
 async function download(url, destination) {
