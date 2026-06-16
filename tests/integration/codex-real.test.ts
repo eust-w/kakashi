@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { CodexExecutor, runCommand, type FusionPlan } from "@kakashi/core";
 
+const CODEX_COMMAND_TIMEOUT_MS = 300_000;
+const TEST_TIMEOUT_MS = 420_000;
+
 describe.runIf(process.env.RUN_CODEX_INTEGRATION === "1")("real Codex CLI execution", () => {
   it("runs codex exec in a temporary project and returns structured output", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "kakashi-codex-"));
@@ -71,10 +74,11 @@ describe.runIf(process.env.RUN_CODEX_INTEGRATION === "1")("real Codex CLI execut
 
     const result = await new CodexExecutor().execute(plan, "Create CODEX_NOTE.md and do not edit package.json.", {
       cwd,
-      timeoutMs: 600_000
+      timeoutMs: CODEX_COMMAND_TIMEOUT_MS
     });
 
+    expect(result.result.timedOut, `${result.result.stderr}\n${result.result.stdout}`).toBe(false);
     expect(result.ok, `${result.result.stderr}\n${result.result.stdout}`).toBe(true);
     expect(result.finalMessage.length).toBeGreaterThan(0);
-  });
+  }, TEST_TIMEOUT_MS);
 });

@@ -49,7 +49,7 @@ export class RunStore {
     );
     return states
       .filter((state): state is KakashiRunState => Boolean(state))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => sortTimestamp(b).localeCompare(sortTimestamp(a)));
   }
 
   async appendEvent(
@@ -115,4 +115,8 @@ function validateRunId(runId: string): string {
 
 function isValidRunId(runId: string): boolean {
   return /^[A-Za-z0-9_-]+$/.test(runId);
+}
+
+function sortTimestamp(state: KakashiRunState): string {
+  return state.updatedAt || state.createdAt;
 }

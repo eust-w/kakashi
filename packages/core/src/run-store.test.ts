@@ -34,6 +34,22 @@ describe("RunStore", () => {
     expect(listed[0]?.mode).toBe("interactive");
   });
 
+  it("lists the most recently updated runs first", async () => {
+    const root = await mkdtemp(join(tmpdir(), "kakashi-runs-"));
+    const store = new RunStore(root);
+
+    const first = await store.create("auto", "first", join(root, "first-out"));
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    const second = await store.create("interactive", "second", join(root, "second-out"));
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    await store.save({ ...first, stage: "completed" });
+
+    const listed = await store.list();
+
+    expect(listed.map((state) => state.runId)).toEqual([first.runId, second.runId]);
+    expect(listed[0]?.stage).toBe("completed");
+  });
+
   it("ignores non-run directories when listing persisted runs", async () => {
     const root = await mkdtemp(join(tmpdir(), "kakashi-runs-"));
     const store = new RunStore(root);

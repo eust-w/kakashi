@@ -31,7 +31,7 @@ Run state is stored under `.kakashi/runs/<runId>`:
 
 CLI inspection commands read this store directly:
 
-- `kakashi runs` lists recent runs for the current workspace.
+- `kakashi runs` lists runs for the current workspace by latest update time, so newly completed or failed older runs remain easy to find.
 - `kakashi inspect <runId>` prints the latest run state as JSON by default, including structured stderr errors for missing runs.
 - `kakashi events <runId>` prints the append-only event log.
 - `--json` on supported commands produces clean machine-readable output for scripts and CI.
