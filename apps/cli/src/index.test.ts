@@ -9,6 +9,7 @@ import { RunStore } from "../../../packages/core/src/run-store";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const tsxBin = join(repoRoot, "node_modules", ".bin", "tsx");
 const cliEntry = join(repoRoot, "apps", "cli", "src", "index.ts");
+const tsconfig = join(repoRoot, "tsconfig.base.json");
 
 describe("kakashi CLI run inspection commands", () => {
   it("lists runs and prints event logs as machine-readable JSON", async () => {
@@ -52,7 +53,7 @@ interface CliResult {
 
 async function runCli(args: string[], cwd: string): Promise<CliResult> {
   return await new Promise((resolveRun) => {
-    const child = spawn(tsxBin, [cliEntry, ...args], {
+    const child = spawn(tsxBin, ["--tsconfig", tsconfig, cliEntry, ...args], {
       cwd,
       env: {
         ...process.env,
