@@ -28,6 +28,7 @@
     "dev": "pnpm --filter @kakashi/server dev",
     "dev:web": "pnpm --filter @kakashi/web dev",
     "lint": "eslint .",
+    "audit:high": "pnpm audit --audit-level high",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -53,5 +54,10 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.48.0",
     "vitest": "^4.0.15"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild": "^0.28.1"
+    }
   }
 }

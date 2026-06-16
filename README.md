@@ -359,6 +359,7 @@ Kakashi 生成的项目会复制来源仓库许可证，并在 `SOURCE_PROVENANC
 
 ```bash
 pnpm lint
+pnpm audit:high
 pnpm typecheck
 pnpm test:coverage
 pnpm build

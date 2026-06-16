@@ -14,6 +14,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
@@ -45,6 +49,7 @@ jobs:
       - name: Verify release build
         run: |
           pnpm lint
+          pnpm audit:high
           pnpm typecheck
           pnpm test:coverage
 

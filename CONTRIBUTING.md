@@ -16,6 +16,7 @@ Kakashi is open source under the MIT License. Issues, documentation fixes, tests
 
 ```bash
 pnpm lint
+pnpm audit:high
 pnpm typecheck
 pnpm test:coverage
 pnpm build
@@ -43,7 +44,7 @@ RUN_CODEX_INTEGRATION=1 pnpm test:codex
 
 ## English
 
-Use Node.js 24+ and pnpm 10+. Run `pnpm lint`, `pnpm typecheck`, `pnpm test:coverage`, and `pnpm build` before opening a pull request. Run `pnpm test:e2e` for Web UI changes. For GitHub search, Codex execution, or verifier-loop changes, mention whether you ran the real integration tests.
+Use Node.js 24+ and pnpm 10+. Run `pnpm lint`, `pnpm audit:high`, `pnpm typecheck`, `pnpm test:coverage`, and `pnpm build` before opening a pull request. Run `pnpm test:e2e` for Web UI changes. For GitHub search, Codex execution, or verifier-loop changes, mention whether you ran the real integration tests.
 
 Read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SUPPORT.md](SUPPORT.md), and [SECURITY.md](SECURITY.md) before contributing. Use the templates under `.github/` for bugs, feature requests, and pull requests.
 

@@ -359,6 +359,7 @@ Local checks:
 
 ```bash
 pnpm lint
+pnpm audit:high
 pnpm typecheck
 pnpm test:coverage
 pnpm build

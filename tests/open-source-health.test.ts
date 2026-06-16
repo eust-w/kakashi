@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { pathExists } from "../packages/core/src/utils/fs";
+import packageJson from "../package.json";
 
 describe("open-source project health", () => {
   it("keeps standard community health files in supported GitHub locations", async () => {
@@ -25,5 +26,24 @@ describe("open-source project health", () => {
 
     expect(ci).toContain("permissions:\n  contents: read");
     expect(release).toContain("permissions:\n  contents: write");
+  });
+
+  it("keeps a high-severity dependency audit in the standard verification path", async () => {
+    const ci = await readFile(".github/workflows/ci.yml", "utf8");
+    const release = await readFile(".github/workflows/release.yml", "utf8");
+
+    expect(packageJson.scripts).toHaveProperty("audit:high", "pnpm audit --audit-level high");
+    expect(ci).toContain("pnpm audit:high");
+    expect(release).toContain("pnpm audit:high");
+  });
+
+  it("uses workflow concurrency to avoid duplicate same-ref runs", async () => {
+    const ci = await readFile(".github/workflows/ci.yml", "utf8");
+    const release = await readFile(".github/workflows/release.yml", "utf8");
+
+    expect(ci).toContain("concurrency:");
+    expect(ci).toContain("cancel-in-progress: true");
+    expect(release).toContain("concurrency:");
+    expect(release).toContain("cancel-in-progress: false");
   });
 });

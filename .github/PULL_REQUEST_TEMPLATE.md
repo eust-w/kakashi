@@ -7,6 +7,7 @@ Describe the change and why it is needed.
 List the commands you ran.
 
 - [ ] `pnpm lint`
+- [ ] `pnpm audit:high`
 - [ ] `pnpm typecheck`
 - [ ] `pnpm test:coverage`
 - [ ] `pnpm build`
