@@ -4,9 +4,12 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createServer } from "node:net";
+import { createRequire } from "node:module";
 import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
 import { resolveOutputDirInsideWorkDir } from "./output-path";
+
+const require = createRequire(import.meta.url);
 
 describe("resolveOutputDirInsideWorkDir", () => {
   it("keeps relative output directories inside the work directory", async () => {
@@ -69,13 +72,15 @@ describe("server run lifecycle", () => {
 
 async function withRunningServer(workDir: string, run: (baseUrl: string) => Promise<void>): Promise<void> {
   const port = await getOpenPort();
-  const child = spawn(resolve("node_modules/.bin/tsx"), [resolve("apps/server/src/index.ts"), `--port=${port}`], {
+  const tsxCli = join(dirname(require.resolve("tsx/package.json")), "dist", "cli.mjs");
+  const child = spawn(process.execPath, [tsxCli, resolve("apps/server/src/index.ts"), `--port=${port}`], {
     cwd: workDir,
     env: { ...process.env, KAKASHI_WEB_DIST: "" }
   });
+  const output = captureOutput(child);
   const baseUrl = `http://127.0.0.1:${port}`;
   try {
-    await waitForHealth(baseUrl, child);
+    await waitForHealth(baseUrl, child, output);
     await run(baseUrl);
   } finally {
     child.kill("SIGTERM");
@@ -93,11 +98,34 @@ async function getOpenPort(): Promise<number> {
   return port;
 }
 
-async function waitForHealth(baseUrl: string, child: ChildProcessWithoutNullStreams): Promise<void> {
+function captureOutput(child: ChildProcessWithoutNullStreams): { stdout: string; stderr: string } {
+  const output = { stdout: "", stderr: "" };
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    output.stdout += chunk;
+  });
+  child.stderr.on("data", (chunk: string) => {
+    output.stderr += chunk;
+  });
+  return output;
+}
+
+async function waitForHealth(
+  baseUrl: string,
+  child: ChildProcessWithoutNullStreams,
+  output: { stdout: string; stderr: string }
+): Promise<void> {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
-      throw new Error(`Server exited before becoming ready with code ${child.exitCode}.`);
+      throw new Error(
+        [
+          `Server exited before becoming ready with code ${child.exitCode}.`,
+          `stdout:\n${tail(output.stdout) || "<empty>"}`,
+          `stderr:\n${tail(output.stderr) || "<empty>"}`
+        ].join("\n")
+      );
     }
     try {
       const response = await fetch(`${baseUrl}/health`);
@@ -106,5 +134,13 @@ async function waitForHealth(baseUrl: string, child: ChildProcessWithoutNullStre
       await new Promise((resolveWait) => setTimeout(resolveWait, 100));
     }
   }
-  throw new Error("Server did not become ready within 5 seconds.");
+  throw new Error(
+    [`Server did not become ready within 5 seconds.`, `stdout:\n${tail(output.stdout) || "<empty>"}`, `stderr:\n${tail(output.stderr) || "<empty>"}`].join(
+      "\n"
+    )
+  );
+}
+
+function tail(value: string): string {
+  return value.trim().slice(-4_000);
 }
