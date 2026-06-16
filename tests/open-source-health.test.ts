@@ -47,4 +47,13 @@ describe("open-source project health", () => {
     expect(release).toContain("concurrency:");
     expect(release).toContain("cancel-in-progress: false");
   });
+
+  it("executes built release CLI assets before publishing them", async () => {
+    const release = await readFile(".github/workflows/release.yml", "utf8");
+
+    expect(release).toContain("Verify built CLI assets");
+    expect(release).toContain("$GITHUB_WORKSPACE/dist/release/.bundle/kakashi.mjs");
+    expect(release).toContain("$GITHUB_WORKSPACE/dist/executables/kakashi-v${VERSION}-${HOST_TARGET}");
+    expect(release.match(/runs --json/g)?.length).toBeGreaterThanOrEqual(2);
+  });
 });
