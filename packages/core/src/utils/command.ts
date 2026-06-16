@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { access } from "node:fs/promises";
 import { delimiter } from "node:path";
 import type { CommandResult } from "../types";
@@ -12,6 +12,7 @@ export interface RunCommandOptions {
   onStdout?: (chunk: string) => void;
   onStderr?: (chunk: string) => void;
   readyPattern?: RegExp;
+  signal?: AbortSignal;
 }
 
 export async function runCommand(
@@ -24,40 +25,56 @@ export async function runCommand(
   let stdout = "";
   let stderr = "";
   let timedOut = false;
+  let aborted = false;
   let readyMatched = false;
 
   return await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
       env: { ...process.env, ...options.env },
-      stdio: ["pipe", "pipe", "pipe"]
+      stdio: ["pipe", "pipe", "pipe"],
+      detached: process.platform !== "win32"
     });
 
-    let timeout: NodeJS.Timeout | null = options.timeoutMs
-      ? setTimeout(() => {
-          timedOut = true;
-          child.kill("SIGTERM");
-          setTimeout(() => {
-            if (!child.killed) child.kill("SIGKILL");
-          }, 2_000).unref();
-        }, options.timeoutMs)
-      : null;
-
-    const checkReady = () => {
-      if (!options.readyPattern || readyMatched) return;
-      if (!options.readyPattern.test(`${stdout}\n${stderr}`)) return;
-      readyMatched = true;
+    const terminate = (reason: "abort" | "ready" | "timeout") => {
+      if (reason === "timeout") timedOut = true;
+      if (reason === "abort") aborted = true;
+      if (reason === "ready") readyMatched = true;
       if (timeout) {
         clearTimeout(timeout);
         timeout = null;
       }
-      child.kill("SIGTERM");
+      killProcessTree(child, "SIGTERM");
       setTimeout(() => {
-        if (!child.killed) child.kill("SIGKILL");
+        if (child.exitCode === null && child.signalCode === null) {
+          killProcessTree(child, "SIGKILL");
+        }
       }, 2_000).unref();
     };
 
-    child.on("error", reject);
+    let timeout: NodeJS.Timeout | null = options.timeoutMs
+      ? setTimeout(() => {
+          terminate("timeout");
+        }, options.timeoutMs)
+      : null;
+
+    const abortListener = () => terminate("abort");
+    if (options.signal?.aborted) {
+      terminate("abort");
+    } else {
+      options.signal?.addEventListener("abort", abortListener, { once: true });
+    }
+
+    const checkReady = () => {
+      if (!options.readyPattern || readyMatched) return;
+      if (!options.readyPattern.test(`${stdout}\n${stderr}`)) return;
+      terminate("ready");
+    };
+
+    child.on("error", (error) => {
+      options.signal?.removeEventListener("abort", abortListener);
+      reject(error);
+    });
     child.stdout.on("data", (chunk: Buffer) => {
       const text = redactSecrets(chunk.toString("utf8"));
       stdout += text;
@@ -72,6 +89,7 @@ export async function runCommand(
     });
     child.on("close", (exitCode, signal) => {
       if (timeout) clearTimeout(timeout);
+      options.signal?.removeEventListener("abort", abortListener);
       resolve({
         command: display,
         cwd: options.cwd,
@@ -80,7 +98,8 @@ export async function runCommand(
         stdout: truncate(stdout),
         stderr: truncate(stderr),
         durationMs: Date.now() - started,
-        timedOut: readyMatched ? false : timedOut
+        timedOut: readyMatched || aborted ? false : timedOut,
+        aborted
       });
     });
 
@@ -89,6 +108,23 @@ export async function runCommand(
     }
     child.stdin.end();
   });
+}
+
+function killProcessTree(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): void {
+  if (!child.pid) return;
+  try {
+    if (process.platform !== "win32") {
+      process.kill(-child.pid, signal);
+    } else {
+      child.kill(signal);
+    }
+  } catch {
+    try {
+      child.kill(signal);
+    } catch {
+      // Process is already gone.
+    }
+  }
 }
 
 export function shellJoin(parts: string[]): string {

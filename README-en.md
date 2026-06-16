@@ -11,7 +11,17 @@ Kakashi is a Codex CLI / Codex Desktop orchestration layer for GitHub multi-repo
 
 Describe the software you want in one sentence. Kakashi searches real GitHub repositories, analyzes capabilities and licenses, selects a main project plus auxiliary sources, creates a fusion plan, asks Codex CLI to modify code, runs real verification, and exports a runnable project with a complete process report.
 
-[Quickstart](#quickstart) · [Configuration](#configuration) · [CLI](#cli) · [Web UI](#web-ui) · [Release](https://github.com/eust-w/kakashi/releases) · [Contributing](#contributing)
+[Highlights](#highlights) · [Quickstart](#quickstart) · [Configuration](#configuration) · [CLI](#cli) · [Web UI](#web-ui) · [Release](https://github.com/eust-w/kakashi/releases) · [Contributing](#contributing)
+
+## Highlights
+
+- Real GitHub search: searches public or authorized repositories through Octokit, with `gh api` fallback for transient network failures.
+- Explainable repository selection: candidates carry score breakdowns and selection reasons, and the final report explains why sources were chosen.
+- Real Codex modification: runs local `codex exec` instead of simulated success paths.
+- Real verification loop: runs install, lint, build, test, CLI help, or server readiness checks, then repairs failures when possible.
+- Cancellable execution: CLI/Web background commands accept cancellation and terminate git, Codex, and verifier subprocesses.
+- Local Web UI: supports auto/interactive modes, repository count, repair iterations, copyleft policy, overwrite behavior, and run cancellation.
+- Provenance and license tracking: exports `SOURCE_PROVENANCE.json`, `KAKASHI_REPORT.md`, and copied source license files.
 
 ## Why Kakashi
 
@@ -97,7 +107,7 @@ Every completed run writes:
 - `KAKASHI_REPORT.md`: full process report.
 - `SOURCE_PROVENANCE.json`: source repositories, capability matches, and source references.
 - `.kakashi/run-report.json`: machine-readable run record.
-- `.kakashi/source-licenses/`: copied source repository licenses.
+- `.kakashi/licenses/`: copied source repository licenses.
 
 ## Configuration
 
@@ -255,13 +265,19 @@ pnpm kakashi serve --web-dir apps/web/dist --port 4317
 
 Open `http://127.0.0.1:4317/`.
 
-The Web UI does not have a separate API key configuration. It uses the same environment and PATH as the Kakashi server process. In the same terminal, verify:
+The Web UI does not have a separate API key configuration. It uses the same environment and PATH as the Kakashi server process. The Web UI can configure run mode, candidate repository count, repair iterations, copyleft policy, overwrite behavior, and cancellation for active runs. In the same terminal, verify:
 
 ```bash
 gh auth status
 codex login status
 kakashi doctor
 ```
+
+The Web UI restricts output directories to the server work directory. Use relative paths such as `kakashi-output` or `generated/my-app`, and do not set the output directory to the server work directory itself.
+
+## Open Source Status
+
+Kakashi is open source under the MIT License. The main repository is [eust-w/kakashi](https://github.com/eust-w/kakashi). CI runs lint, typecheck, coverage tests, build, and Web e2e. Real GitHub/Codex integration tests require local authentication and are intended for release checks or core workflow changes.
 
 ## Source Setup
 

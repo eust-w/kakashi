@@ -123,7 +123,8 @@ describe("Exporter", () => {
             stdout: "",
             stderr: "",
             durationMs: 100,
-            timedOut: false
+            timedOut: false,
+            aborted: false
           }
         }
       ]
@@ -146,7 +147,8 @@ describe("Exporter", () => {
         stdout: "",
         stderr: "",
         durationMs: 500,
-        timedOut: false
+        timedOut: false,
+        aborted: false
       }
     };
 

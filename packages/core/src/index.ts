@@ -3,6 +3,7 @@ export * from "./errors";
 export * from "./requirement-parser";
 export * from "./github-auth";
 export * from "./license-policy";
+export * from "./repository-score";
 export * from "./github-searcher";
 export * from "./repo-manager";
 export * from "./repo-analyzer";

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, CheckCircle2, GitBranch, Play, RefreshCw, Search, ShieldCheck, SquareTerminal } from "lucide-react";
+import { Activity, CheckCircle2, GitBranch, Play, RefreshCw, Search, ShieldCheck, SquareTerminal, XCircle } from "lucide-react";
 import "./styles.css";
 
 type RunStage =
@@ -73,6 +73,10 @@ function App() {
   const [requirement, setRequirement] = useState("");
   const [outputDir, setOutputDir] = useState("kakashi-output");
   const [mode, setMode] = useState<"auto" | "interactive">("auto");
+  const [maxRepos, setMaxRepos] = useState(12);
+  const [maxIterations, setMaxIterations] = useState(3);
+  const [allowCopyleft, setAllowCopyleft] = useState(false);
+  const [force, setForce] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -133,7 +137,7 @@ function App() {
         mode,
         requirement,
         outputDir,
-        options: { maxRepos: 12, maxIterations: 3, force: false }
+        options: { maxRepos, maxIterations, allowCopyleft, force }
       })
     });
     setBusy(false);
@@ -155,6 +159,12 @@ function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ confirmed })
     });
+    await loadRun(active.runId);
+  }
+
+  async function cancelRun() {
+    if (!active || isTerminalStage(active.stage)) return;
+    await fetch(`/api/runs/${active.runId}/cancel`, { method: "POST" });
     await loadRun(active.runId);
   }
 
@@ -184,6 +194,40 @@ function App() {
             Output directory
             <input value={outputDir} onChange={(event) => setOutputDir(event.target.value)} required />
           </label>
+          <div className="number-grid">
+            <label>
+              Max repositories
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={maxRepos}
+                onChange={(event) => setMaxRepos(Number(event.target.value))}
+                required
+              />
+            </label>
+            <label>
+              Repair iterations
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={maxIterations}
+                onChange={(event) => setMaxIterations(Number(event.target.value))}
+                required
+              />
+            </label>
+          </div>
+          <div className="checkbox-grid">
+            <label>
+              <input type="checkbox" checked={allowCopyleft} onChange={(event) => setAllowCopyleft(event.target.checked)} />
+              Allow copyleft
+            </label>
+            <label>
+              <input type="checkbox" checked={force} onChange={(event) => setForce(event.target.checked)} />
+              Overwrite output
+            </label>
+          </div>
           <div className="segmented">
             <button type="button" className={mode === "auto" ? "selected" : ""} onClick={() => setMode("auto")}>
               <Play size={15} /> Auto
@@ -220,7 +264,15 @@ function App() {
                 <h2>{active.requirementText}</h2>
                 <p>{active.outputDir}</p>
               </div>
-              <Status stage={active.stage} />
+              <div className="header-actions">
+                {!isTerminalStage(active.stage) && (
+                  <button className="secondary danger" onClick={() => void cancelRun()}>
+                    <XCircle size={16} />
+                    Cancel
+                  </button>
+                )}
+                <Status stage={active.stage} />
+              </div>
             </header>
 
             <section className="panel-grid">
@@ -316,6 +368,10 @@ function Status({ stage }: { stage: RunStage }) {
   );
 }
 
+function isTerminalStage(stage: RunStage): boolean {
+  return stage === "completed" || stage === "failed" || stage === "cancelled";
+}
+
 function Panel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="panel">
@@ -342,4 +398,3 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </React.StrictMode>
 );
-

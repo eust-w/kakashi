@@ -41,6 +41,7 @@ export interface PreparedRun {
 const DEFAULT_TIMEOUT = 300_000;
 
 export class KakashiOrchestrator {
+  private readonly abortController = new AbortController();
   private readonly parser = new RequirementParser();
   private readonly searcher = new GitHubSearcher();
   private readonly repoManager = new RepoManager();
@@ -56,6 +57,10 @@ export class KakashiOrchestrator {
   constructor(private readonly options: OrchestratorOptions) {
     const workDir = resolve(options.workDir ?? process.cwd());
     this.store = new RunStore(join(workDir, ".kakashi", "runs"));
+  }
+
+  cancel(): void {
+    this.abortController.abort();
   }
 
   async run(requirementText: string, mode: RunMode = "auto"): Promise<KakashiRunState> {
@@ -95,8 +100,10 @@ export class KakashiOrchestrator {
   }
 
   async executePrepared(state: KakashiRunState, plan: FusionPlan, opts = this.resolveOptions()): Promise<KakashiRunState> {
+    this.throwIfCancelled();
     await this.emit(state, "materializing", "info", "Materializing target project from the selected main repository.");
     await this.materialize(plan, opts);
+    this.throwIfCancelled();
 
     const codexRuns: CodexResult[] = [];
     let verification: VerificationResult = {
@@ -117,6 +124,7 @@ export class KakashiOrchestrator {
         cwd: plan.outputDir,
         timeoutMs: opts.commandTimeoutMs,
         model: opts.codexModel,
+        signal: opts.signal,
         onEvent: (event) => {
           void this.emit(state, "executing", "info", "Codex event", event);
         },
@@ -125,10 +133,12 @@ export class KakashiOrchestrator {
         }
       });
       codexRuns.push(codexResult);
+      this.throwIfCancelled();
 
       await this.emit(state, "verifying", "info", "Running real project verification commands.");
-      verification = await this.verifier.verify(plan.outputDir, opts.commandTimeoutMs);
+      verification = await this.verifier.verify(plan.outputDir, opts.commandTimeoutMs, opts.signal);
       verificationAttempts.push(verification);
+      this.throwIfCancelled();
       await this.emit(state, "verifying", verification.ok ? "info" : "warn", verification.summary, verification);
       if (verification.ok) break;
 
@@ -154,17 +164,20 @@ export class KakashiOrchestrator {
   }
 
   private async prepareExisting(state: KakashiRunState, opts: KakashiOptions): Promise<PreparedRun> {
+    this.throwIfCancelled();
     await ensureDir(opts.cacheDir);
     await this.emit(state, "parsing", "info", "Parsing requirement.");
     const spec = this.parser.parse(state.requirementText);
     await this.store.save({ ...state, stage: "parsing", spec });
 
     await this.emit(state, "searching", "info", "Searching GitHub for source repositories.");
+    this.throwIfCancelled();
     const candidates = await this.searcher.search(spec, {
       cwd: opts.workDir,
       maxRepos: opts.maxRepos,
       allowCopyleft: opts.allowCopyleft
     });
+    this.throwIfCancelled();
     if (candidates.length === 0) {
       throw new KakashiError("NO_REPOS_FOUND", "No repositories matched the requirement and license policy.");
     }
@@ -173,7 +186,8 @@ export class KakashiOrchestrator {
     await this.emit(state, "analyzing", "info", `Cloning and analyzing ${candidates.length} repository candidate(s).`);
     const analyses: RepoAnalysis[] = [];
     for (const candidate of candidates) {
-      const localPath = await this.repoManager.cloneToCache(candidate, opts.cacheDir, opts.commandTimeoutMs);
+      this.throwIfCancelled();
+      const localPath = await this.repoManager.cloneToCache(candidate, opts.cacheDir, opts.commandTimeoutMs, opts.signal);
       analyses.push(await this.analyzer.analyze(candidate, localPath, spec.capabilities));
       await this.emit(state, "analyzing", "info", `Analyzed ${candidate.fullName}.`);
     }
@@ -204,13 +218,14 @@ export class KakashiOrchestrator {
     }
 
     if (await isDirectoryEmpty(opts.outputDir)) {
-      await this.repoManager.cloneMainToOutput(plan.main.repo, opts.outputDir, opts.commandTimeoutMs);
+      await this.repoManager.cloneMainToOutput(plan.main.repo, opts.outputDir, opts.commandTimeoutMs, opts.signal);
     }
 
     const sourcesDir = join(opts.outputDir, ".kakashi", "sources");
     await ensureDir(sourcesDir);
     for (const source of plan.auxiliaries) {
-      source.localPath = await this.repoManager.cloneAuxiliary(source.repo, sourcesDir, opts.commandTimeoutMs);
+      this.throwIfCancelled();
+      source.localPath = await this.repoManager.cloneAuxiliary(source.repo, sourcesDir, opts.commandTimeoutMs, opts.signal);
     }
     await writeJsonFile(join(opts.outputDir, ".kakashi", "fusion-plan.json"), redactObject(plan));
   }
@@ -233,7 +248,8 @@ export class KakashiOrchestrator {
     });
     const known = new Set([plan.main.repo.fullName, ...plan.auxiliaries.map((source) => source.repo.fullName)]);
     for (const candidate of candidates.filter((candidate) => !known.has(candidate.fullName)).slice(0, 2)) {
-      const localPath = await this.repoManager.cloneAuxiliary(candidate, join(opts.outputDir, ".kakashi", "sources"), opts.commandTimeoutMs);
+      this.throwIfCancelled();
+      const localPath = await this.repoManager.cloneAuxiliary(candidate, join(opts.outputDir, ".kakashi", "sources"), opts.commandTimeoutMs, opts.signal);
       plan.auxiliaries.push({
         role: "auxiliary",
         repo: candidate,
@@ -258,8 +274,15 @@ export class KakashiOrchestrator {
       allowCopyleft: this.options.allowCopyleft ?? false,
       force: this.options.force ?? false,
       codexModel: this.options.codexModel,
-      commandTimeoutMs: this.options.commandTimeoutMs ?? DEFAULT_TIMEOUT
+      commandTimeoutMs: this.options.commandTimeoutMs ?? DEFAULT_TIMEOUT,
+      signal: this.abortController.signal
     };
+  }
+
+  private throwIfCancelled(): void {
+    if (this.abortController.signal.aborted) {
+      throw new KakashiError("RUN_CANCELLED", "Run cancelled by user.");
+    }
   }
 
   private async emit(
@@ -277,7 +300,7 @@ export class KakashiOrchestrator {
     const message = error instanceof Error ? error.message : String(error);
     const failed = {
       ...state,
-      stage: "failed" as const,
+      stage: error instanceof KakashiError && error.code === "RUN_CANCELLED" ? "cancelled" as const : "failed" as const,
       error: message
     };
     await this.store.save(failed);

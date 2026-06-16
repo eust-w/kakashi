@@ -43,6 +43,7 @@ export interface KakashiOptions {
   force: boolean;
   codexModel?: string;
   commandTimeoutMs: number;
+  signal?: AbortSignal;
 }
 
 export interface GitHubRepoOwner {
@@ -69,6 +70,8 @@ export interface RepoCandidate {
   archived: boolean;
   fork: boolean;
   score: number;
+  scoreBreakdown?: Record<string, number>;
+  scoreReason?: string;
   matchedCapabilities: string[];
 }
 
@@ -153,6 +156,7 @@ export interface CommandResult {
   stderr: string;
   durationMs: number;
   timedOut: boolean;
+  aborted: boolean;
 }
 
 export interface VerificationStep {

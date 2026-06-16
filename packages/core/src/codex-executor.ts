@@ -8,6 +8,7 @@ export interface CodexExecutionOptions {
   cwd: string;
   timeoutMs: number;
   model?: string;
+  signal?: AbortSignal;
   onEvent?: (event: unknown) => void;
   onText?: (text: string) => void;
 }
@@ -47,6 +48,7 @@ export class CodexExecutor {
       cwd: options.cwd,
       input: prompt,
       timeoutMs: options.timeoutMs,
+      signal: options.signal,
       onStdout: (chunk) => {
         stdoutBuffer += chunk;
         const lines = stdoutBuffer.split(/\r?\n/);

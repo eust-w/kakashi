@@ -5,7 +5,9 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
-import { KakashiOrchestrator, type KakashiRunState, type RunEvent } from "@kakashi/core";
+import { isKakashiError, KakashiOrchestrator, type KakashiRunState, type RunEvent } from "@kakashi/core";
+import { resolveOutputDirInsideWorkDir } from "./output-path";
+export { resolveOutputDirInsideWorkDir } from "./output-path";
 
 export interface ServerOptions {
   port: number;
@@ -48,6 +50,7 @@ const ConfirmSchema = z.object({
 const running = new Map<string, KakashiOrchestrator>();
 const events = new EventEmitter();
 events.setMaxListeners(1_000);
+const STORE_ONLY_OUTPUT_DIR = ".kakashi/server-output-placeholder";
 
 export function createApp(workDir = process.cwd(), web?: string | WebAssetSource): express.Express {
   const webSource: WebAssetSource = typeof web === "string" ? { webDir: web } : web ?? {};
@@ -61,7 +64,7 @@ export function createApp(workDir = process.cwd(), web?: string | WebAssetSource
 
   app.get("/api/runs", async (_req, res, next) => {
     try {
-      const orchestrator = createOrchestrator(workDir, ".", {});
+      const orchestrator = createOrchestrator(workDir, STORE_ONLY_OUTPUT_DIR, {});
       res.json(await orchestrator.store.list());
     } catch (error) {
       next(error);
@@ -88,7 +91,7 @@ export function createApp(workDir = process.cwd(), web?: string | WebAssetSource
 
   app.get("/api/runs/:id", async (req, res, next) => {
     try {
-      const orchestrator = running.get(req.params.id) ?? createOrchestrator(workDir, ".", {});
+      const orchestrator = running.get(req.params.id) ?? createOrchestrator(workDir, STORE_ONLY_OUTPUT_DIR, {});
       const state = await orchestrator.store.load(req.params.id);
       if (!state) {
         res.status(404).json({ error: "Run not found" });
@@ -102,7 +105,7 @@ export function createApp(workDir = process.cwd(), web?: string | WebAssetSource
 
   app.get("/api/runs/:id/events", async (req, res, next) => {
     try {
-      const orchestrator = running.get(req.params.id) ?? createOrchestrator(workDir, ".", {});
+      const orchestrator = running.get(req.params.id) ?? createOrchestrator(workDir, STORE_ONLY_OUTPUT_DIR, {});
       const existing = await orchestrator.store.events(req.params.id);
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -135,13 +138,14 @@ export function createApp(workDir = process.cwd(), web?: string | WebAssetSource
         return;
       }
       if (!body.confirmed) {
+        orchestrator.cancel();
         const cancelled: KakashiRunState = { ...state, stage: "cancelled", error: "Cancelled by user." };
         await orchestrator.store.save(cancelled);
         res.json(cancelled);
         return;
       }
       res.status(202).json(state);
-      void orchestrator.executePrepared(state, state.plan).finally(() => running.delete(req.params.id));
+      void runPreparedInBackground(orchestrator, state, state.plan).finally(() => running.delete(req.params.id));
     } catch (error) {
       next(error);
     }
@@ -149,13 +153,14 @@ export function createApp(workDir = process.cwd(), web?: string | WebAssetSource
 
   app.post("/api/runs/:id/cancel", async (req, res, next) => {
     try {
-      const orchestrator = running.get(req.params.id) ?? createOrchestrator(workDir, ".", {});
+      const orchestrator = running.get(req.params.id) ?? createOrchestrator(workDir, STORE_ONLY_OUTPUT_DIR, {});
       const state = await orchestrator.store.load(req.params.id);
       if (!state) {
         res.status(404).json({ error: "Run not found" });
         return;
       }
       const cancelled: KakashiRunState = { ...state, stage: "cancelled", error: "Cancelled by user." };
+      orchestrator.cancel();
       await orchestrator.store.save(cancelled);
       running.delete(req.params.id);
       res.json(cancelled);
@@ -203,6 +208,20 @@ export async function startServer(options: ServerOptions): Promise<void> {
   }
 }
 
+async function runPreparedInBackground(
+  orchestrator: KakashiOrchestrator,
+  state: KakashiRunState,
+  plan: NonNullable<KakashiRunState["plan"]>
+): Promise<void> {
+  try {
+    await orchestrator.executePrepared(state, plan);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const stage = isKakashiError(error) && error.code === "RUN_CANCELLED" ? "cancelled" : "failed";
+    await orchestrator.store.save({ ...state, stage, error: message });
+  }
+}
+
 function createOrchestrator(
   workDir: string,
   outputDir: string,
@@ -214,9 +233,10 @@ function createOrchestrator(
     codexModel?: string;
   }
 ): KakashiOrchestrator {
+  const safeOutputDir = resolveOutputDirInsideWorkDir(workDir, outputDir);
   return new KakashiOrchestrator({
     workDir,
-    outputDir: resolve(workDir, outputDir),
+    outputDir: safeOutputDir,
     maxRepos: options.maxRepos,
     maxIterations: options.maxIterations,
     allowCopyleft: options.allowCopyleft,

@@ -39,7 +39,7 @@ export class Verifier {
     return [];
   }
 
-  async verify(projectDir: string, timeoutMs: number): Promise<VerificationResult> {
+  async verify(projectDir: string, timeoutMs: number, signal?: AbortSignal): Promise<VerificationResult> {
     const steps = await this.detect(projectDir);
     if (steps.length === 0) {
       return {
@@ -54,6 +54,7 @@ export class Verifier {
       const result = await runCommand(step.command[0]!, step.command.slice(1), {
         cwd: projectDir,
         timeoutMs: step.mode === "readiness" ? Math.min(timeoutMs, READINESS_TIMEOUT_MS) : step.name.includes("install") ? Math.max(timeoutMs, 600_000) : timeoutMs,
+        signal,
         readyPattern: step.mode === "readiness" ? SERVER_READY_PATTERN : undefined
       });
       const ok = this.isStepOk(step, result);
@@ -64,6 +65,7 @@ export class Verifier {
         result
       });
       if (!ok && step.required) break;
+      if (signal?.aborted) break;
     }
 
     const failedRequired = results.find((step) => !step.ok && steps.find((candidate) => candidate.name === step.name)?.required);

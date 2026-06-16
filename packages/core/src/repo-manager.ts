@@ -6,14 +6,15 @@ import { runCommand } from "./utils/command";
 import { slugify } from "./utils/ids";
 
 export class RepoManager {
-  async cloneToCache(candidate: RepoCandidate, cacheDir: string, timeoutMs: number): Promise<string> {
+  async cloneToCache(candidate: RepoCandidate, cacheDir: string, timeoutMs: number, signal?: AbortSignal): Promise<string> {
     await ensureDir(cacheDir);
     const repoDir = join(cacheDir, slugify(candidate.fullName));
 
     if (await pathExists(join(repoDir, ".git"))) {
       await runCommand("git", ["-C", repoDir, "fetch", "--depth", "1", "origin", candidate.defaultBranch], {
         cwd: cacheDir,
-        timeoutMs
+        timeoutMs,
+        signal
       });
       return repoDir;
     }
@@ -23,7 +24,8 @@ export class RepoManager {
       ["clone", "--depth", "1", "--branch", candidate.defaultBranch, candidate.cloneUrl, repoDir],
       {
         cwd: cacheDir,
-        timeoutMs
+        timeoutMs,
+        signal
       }
     );
 
@@ -33,24 +35,26 @@ export class RepoManager {
     return repoDir;
   }
 
-  async cloneMainToOutput(candidate: RepoCandidate, outputDir: string, timeoutMs: number): Promise<void> {
+  async cloneMainToOutput(candidate: RepoCandidate, outputDir: string, timeoutMs: number, signal?: AbortSignal): Promise<void> {
     const parent = dirname(outputDir);
     const result = await runCommand("git", ["clone", "--depth", "1", candidate.cloneUrl, outputDir], {
       cwd: parent,
-      timeoutMs
+      timeoutMs,
+      signal
     });
     if (result.exitCode !== 0) {
       throw new KakashiError("GIT_OUTPUT_CLONE_FAILED", `Failed to materialize ${candidate.fullName}.`, result);
     }
   }
 
-  async cloneAuxiliary(candidate: RepoCandidate, sourcesDir: string, timeoutMs: number): Promise<string> {
+  async cloneAuxiliary(candidate: RepoCandidate, sourcesDir: string, timeoutMs: number, signal?: AbortSignal): Promise<string> {
     await ensureDir(sourcesDir);
     const dest = join(sourcesDir, slugify(candidate.fullName));
     if (await pathExists(join(dest, ".git"))) return dest;
     const result = await runCommand("git", ["clone", "--depth", "1", candidate.cloneUrl, dest], {
       cwd: sourcesDir,
-      timeoutMs
+      timeoutMs,
+      signal
     });
     if (result.exitCode !== 0) {
       throw new KakashiError("GIT_AUX_CLONE_FAILED", `Failed to clone auxiliary repo ${candidate.fullName}.`, result);

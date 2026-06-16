@@ -4,6 +4,7 @@ import { KakashiError } from "./errors";
 import { resolveGitHubToken } from "./github-auth";
 import { isAllowedLicense } from "./license-policy";
 import { runCommand } from "./utils/command";
+import { explainRepositoryScore, meaningfulTermsForSpec, normalizeTerms } from "./repository-score";
 
 export interface GitHubSearchOptions {
   cwd: string;
@@ -33,9 +34,10 @@ export class GitHubSearcher {
         })
         .then((response) => response.data)
         .catch(async (error: unknown) => {
-          if (isBadCredentials(error)) {
+          if (isBadCredentials(error) || isTransientNetworkError(error)) {
             const ghData = await this.searchViaGh(query, options);
             if (ghData) return ghData;
+            if (isTransientNetworkError(error)) throw error;
             octokit = new Octokit();
             const response = await octokit.search.repos({
               q: query,
@@ -61,6 +63,7 @@ export class GitHubSearcher {
           .filter((capability) => this.matchesCapability(item, capability.keywords))
           .map((capability) => capability.id);
 
+        const score = explainRepositoryScore(item, matchedCapabilities.length, spec);
         const candidate: RepoCandidate = {
           id: item.id,
           fullName: item.full_name,
@@ -80,7 +83,9 @@ export class GitHubSearcher {
           pushedAt: item.pushed_at ?? null,
           archived: item.archived ?? false,
           fork: item.fork ?? false,
-          score: this.scoreCandidate(item, matchedCapabilities.length, spec),
+          score: score.total,
+          scoreBreakdown: score.breakdown,
+          scoreReason: score.reason,
           matchedCapabilities
         };
 
@@ -141,7 +146,7 @@ export class GitHubSearcher {
           : "";
 
     const target = spec.target !== "unknown" ? spec.target : "";
-    const meaningfulTerms = this.meaningfulTerms(spec);
+    const meaningfulTerms = meaningfulTermsForSpec(spec);
     const baseTerms = [...new Set([...meaningfulTerms.slice(0, 8), target, ...spec.preferredStack])].filter(Boolean).join(" ");
     const base = `${baseTerms}${language} in:name,description,readme archived:false fork:false`.trim();
     const capabilityQueries = spec.capabilities.slice(0, Math.max(2, Math.min(6, maxRepos))).map((capability) => {
@@ -159,75 +164,8 @@ export class GitHubSearcher {
     return keywords.some((keyword) => haystack.includes(keyword.toLowerCase()));
   }
 
-  private scoreCandidate(
-    item: {
-      stargazers_count?: number;
-      forks_count?: number;
-      open_issues_count?: number;
-      pushed_at?: string | null;
-      language?: string | null;
-      full_name?: string;
-      name?: string;
-      description?: string | null;
-      size?: number;
-    },
-    matchedCapabilityCount: number,
-    spec: RequirementSpec
-  ): number {
-    const stars = Math.log10((item.stargazers_count ?? 0) + 1) * 5;
-    const forks = Math.log10((item.forks_count ?? 0) + 1);
-    const freshness = item.pushed_at
-      ? Math.max(0, 12 - (Date.now() - Date.parse(item.pushed_at)) / (1000 * 60 * 60 * 24 * 60))
-      : 0;
-    const nameDescription = `${item.full_name ?? ""} ${item.name ?? ""} ${item.description ?? ""}`.toLowerCase();
-    const terms = this.meaningfulTerms(spec);
-    const directTermHits = terms.filter((term) => nameDescription.includes(term)).length;
-    const targetBoost =
-      spec.target === "unknown" || nameDescription.includes(spec.target)
-        ? 5
-        : spec.target === "cli" && /\b(cli|command|terminal|shell)\b/i.test(nameDescription)
-          ? 8
-          : 0;
-    const stackBoost = spec.preferredStack.some((stack) => item.language?.toLowerCase().includes(stack)) ? 5 : 0;
-    const sizePenalty = Math.log10((item.size ?? 0) + 1) * 3.5;
-    const issuePenalty = Math.log10((item.open_issues_count ?? 0) + 1);
-    return stars + forks + freshness + matchedCapabilityCount * 5 + directTermHits * 12 + targetBoost + stackBoost - issuePenalty - sizePenalty;
-  }
-
-  private meaningfulTerms(spec: RequirementSpec): string[] {
-    return this.normalizeTerms([
-      ...spec.capabilities.flatMap((capability) => [capability.name, ...capability.keywords]),
-      ...spec.preferredStack
-    ]);
-  }
-
   private normalizeTerms(values: string[]): string[] {
-    const generic = new Set([
-      "app",
-      "application",
-      "build",
-      "create",
-      "small",
-      "simple",
-      "tiny",
-      "minimal",
-      "typescript",
-      "javascript",
-      "node",
-      "react",
-      "test",
-      "tests",
-      "file",
-      "with",
-      "and"
-    ]);
-    return [
-      ...new Set(
-        values
-          .flatMap((value) => value.toLowerCase().match(/[a-z][a-z0-9+-]{1,}|[\p{Script=Han}]{2,}/gu) ?? [])
-          .filter((term) => !generic.has(term))
-      )
-    ].slice(0, 12);
+    return normalizeTerms(values);
   }
 }
 
@@ -252,6 +190,7 @@ interface GitHubSearchItem {
   owner?: { login?: string };
 }
 
+
 function isBadCredentials(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -267,4 +206,9 @@ function isRateLimited(error: unknown): boolean {
   if (status !== 403 && status !== 429) return false;
   const message = "message" in error ? String((error as { message?: unknown }).message) : "";
   return /rate limit|secondary rate limit/i.test(message);
+}
+
+function isTransientNetworkError(error: unknown): boolean {
+  const text = error instanceof Error ? `${error.message} ${(error as { cause?: unknown }).cause ?? ""}` : String(error);
+  return /fetch failed|connect timeout|econnreset|etimedout|socket disconnected|network/i.test(text);
 }

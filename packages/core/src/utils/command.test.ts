@@ -70,6 +70,21 @@ describe("runCommand", () => {
     expect(longResult.stdout).toContain("[truncated");
   });
 
+  it("terminates a running process when the abort signal fires", async () => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 20).unref();
+
+    const result = await runCommand(process.execPath, ["-e", "setInterval(() => {}, 1000);"], {
+      cwd: process.cwd(),
+      timeoutMs: 200,
+      signal: controller.signal
+    } as Parameters<typeof runCommand>[2] & { signal: AbortSignal });
+
+    expect(result.timedOut).toBe(false);
+    expect(result.aborted).toBe(true);
+    expect(result.exitCode).toBeNull();
+  });
+
   it("rejects spawn errors and finds executables on PATH", async () => {
     await expect(runCommand("kakashi-definitely-missing-command", [], { cwd: process.cwd() })).rejects.toThrow();
     await expect(findExecutable("kakashi-definitely-missing-command")).resolves.toBeNull();

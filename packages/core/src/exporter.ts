@@ -92,6 +92,7 @@ export class Exporter {
           `- Clone URL: ${analysis.candidate.cloneUrl}`,
           `- 许可证 / License: ${analysis.candidate.license ?? "unknown"}`,
           `- Stars: ${analysis.candidate.stars}; 语言 / language: ${analysis.candidate.language ?? "unknown"}; 默认分支 / default branch: ${analysis.candidate.defaultBranch}`,
+          `- 选择评分 / Selection score: ${analysis.candidate.score.toFixed(2)} (${analysis.candidate.scoreReason ?? "no score explanation recorded"})`,
           `- 描述 / Description: ${analysis.candidate.description || "无描述 / No description provided."}`,
           `- 本地分析路径 / Local analysis path: \`${analysis.localPath}\``,
           `- 检测到的技术栈 / Stack detected: ${formatList(analysis.stack)}`,

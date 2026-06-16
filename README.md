@@ -11,7 +11,17 @@ Kakashi（复制忍者）是在 Codex CLI / Codex Desktop 之上构建的 GitHub
 
 你用一句话描述想做的软件，Kakashi 会搜索真实 GitHub 仓库，分析它们的能力和许可证，选择主项目与辅助项目，生成融合计划，调用 Codex CLI 修改代码，跑真实验证，并输出一个可运行项目和完整流程报告。
 
-[快速开始](#快速开始) · [配置](#配置) · [CLI](#cli) · [Web-UI](#web-ui) · [Release](https://github.com/eust-w/kakashi/releases) · [贡献](#贡献)
+[亮点](#亮点) · [快速开始](#快速开始) · [配置](#配置) · [CLI](#cli) · [Web-UI](#web-ui) · [Release](https://github.com/eust-w/kakashi/releases) · [贡献](#贡献)
+
+## 亮点
+
+- 真实 GitHub 搜索：通过 Octokit 搜索公开或有权限的仓库，网络抖动时会 fallback 到 `gh api`。
+- 可解释仓库选择：候选仓库会记录评分拆解和选择原因，最终报告会说明为什么选它。
+- 真实 Codex 改造：调用本机 `codex exec`，不使用模拟成功路径。
+- 真实验证闭环：自动运行 install、lint、build、test、CLI help 或 server readiness，并在失败时进入修复回环。
+- 可中止执行：CLI/Web 后台命令支持取消信号，会终止 git、Codex 和 verifier 子进程。
+- 本地 Web UI：支持自动/交互模式、仓库数量、修复轮数、copyleft 策略、覆盖输出和取消运行。
+- 来源与许可证追踪：生成 `SOURCE_PROVENANCE.json`、`KAKASHI_REPORT.md` 和来源仓库许可证副本。
 
 ## 为什么是 Kakashi
 
@@ -97,7 +107,7 @@ Windows PowerShell:
 - `KAKASHI_REPORT.md`：完整流程报告。
 - `SOURCE_PROVENANCE.json`：来源仓库、能力匹配和源码引用。
 - `.kakashi/run-report.json`：机器可读运行记录。
-- `.kakashi/source-licenses/`：来源仓库许可证副本。
+- `.kakashi/licenses/`：来源仓库许可证副本。
 
 ## 配置
 
@@ -255,13 +265,19 @@ pnpm kakashi serve --web-dir apps/web/dist --port 4317
 
 打开 `http://127.0.0.1:4317/`。
 
-网页版不需要单独的 API Key 配置。它使用启动 Kakashi server 的同一个系统环境和 PATH。先在同一个终端里确认：
+网页版不需要单独的 API Key 配置。它使用启动 Kakashi server 的同一个系统环境和 PATH。Web UI 可以设置运行模式、候选仓库数量、修复轮数、copyleft 策略和是否覆盖输出目录，也可以取消正在运行的任务。先在同一个终端里确认：
 
 ```bash
 gh auth status
 codex login status
 kakashi doctor
 ```
+
+Web UI 的输出目录会被限制在启动 server 的工作目录内。请使用类似 `kakashi-output` 或 `generated/my-app` 的相对路径，避免把输出目录设置成 server 工作目录本身。
+
+## 开源状态
+
+Kakashi 当前以 MIT License 开源，主仓库是 [eust-w/kakashi](https://github.com/eust-w/kakashi)。CI 会运行 lint、typecheck、覆盖率测试、构建和 Web e2e。真实 GitHub/Codex 集成测试需要本地认证，适合发布前或核心链路变更后手动运行。
 
 ## 从源码运行
 
