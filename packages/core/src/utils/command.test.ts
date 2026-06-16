@@ -39,7 +39,7 @@ describe("runCommand", () => {
     expect(result.stdout).not.toContain("secret-value");
   });
 
-  it("captures stderr/stdout callbacks, timeouts, and long-output truncation", async () => {
+  it("captures stderr/stdout callbacks", async () => {
     let stdout = "";
     let stderr = "";
     const callbackResult = await runCommand(
@@ -59,19 +59,23 @@ describe("runCommand", () => {
     expect(callbackResult.exitCode).toBe(0);
     expect(stdout).toContain("callback-out");
     expect(stderr).toContain("callback-err");
+  });
 
+  it("marks timed-out command results", async () => {
     const timeoutResult = await runCommand(process.execPath, ["-e", "setInterval(() => {}, 1000);"], {
       cwd: process.cwd(),
       timeoutMs: 50
     });
     expect(timeoutResult.timedOut).toBe(true);
     expect(timeoutResult.exitCode).toBeNull();
+  });
 
+  it("truncates long command output", async () => {
     const longResult = await runCommand(process.execPath, ["-e", "console.log('x'.repeat(81000))"], {
       cwd: process.cwd()
     });
     expect(longResult.stdout).toContain("[truncated");
-  });
+  }, 15_000);
 
   it("terminates a running process when the abort signal fires", async () => {
     const controller = new AbortController();
