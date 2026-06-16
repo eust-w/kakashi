@@ -18,7 +18,7 @@ Describe the software you want in one sentence. Kakashi searches real GitHub rep
 - Real GitHub search: searches public or authorized repositories through Octokit, with `gh api` fallback for transient network failures.
 - Explainable repository selection: candidates carry score breakdowns and selection reasons, and the final report explains why sources were chosen.
 - Real Codex modification: runs local `codex exec` instead of simulated success paths.
-- Real verification loop: runs install, lint, build, test, CLI help, or server readiness checks, then repairs failures when possible.
+- Real verification loop: runs install, lint, build, test, CLI help, or server readiness checks; when server output exposes a local URL, Kakashi performs a real HTTP probe before accepting readiness.
 - Cancellable execution: CLI/Web background commands accept cancellation and terminate git, Codex, and verifier subprocesses.
 - Local Web UI: supports auto/interactive modes, repository count, repair iterations, copyleft policy, overwrite behavior, and run cancellation.
 - Provenance and license tracking: exports `SOURCE_PROVENANCE.json`, `KAKASHI_REPORT.md`, and copied source license files.
@@ -55,7 +55,7 @@ flowchart LR
 - Fusion Planner: selects the main project and auxiliary projects, then creates a fusion plan.
 - Codex Executor: calls local `codex exec` for real code changes.
 - Gap Detector: reads verifier failures, identifies missing capabilities, and searches GitHub again.
-- Verifier: detects and runs install, build, test, lint, start, and similar commands.
+- Verifier: detects and runs install, build, test, lint, start, and similar commands; server readiness validates HTTP 2xx/3xx responses when a local URL is available.
 - Exporter: writes the new project, README, run commands, verification report, and provenance.
 
 ## Quickstart

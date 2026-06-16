@@ -1,4 +1,6 @@
 import { readFile } from "node:fs/promises";
+import { get as httpGet } from "node:http";
+import { get as httpsGet } from "node:https";
 import { dirname, join } from "node:path";
 import type { VerificationResult, VerificationStep } from "./types";
 import { pathExists, readJsonFile } from "./utils/fs";
@@ -14,7 +16,7 @@ interface PackageJson {
   packageManager?: string;
 }
 
-const SERVER_READY_PATTERN = /localhost|127\.0\.0\.1|0\.0\.0\.0|listening|ready|started|compiled|running|server/i;
+const SERVER_READY_PATTERN = /localhost|127\.0\.0\.1|0\.0\.0\.0|listening|ready|started|compiled|running/i;
 const READINESS_TIMEOUT_MS = 30_000;
 
 export class Verifier {
@@ -63,7 +65,8 @@ export class Verifier {
         cwd: join(projectDir, step.cwd ?? "."),
         timeoutMs: step.mode === "readiness" ? Math.min(timeoutMs, READINESS_TIMEOUT_MS) : step.name.includes("install") ? Math.max(timeoutMs, 600_000) : timeoutMs,
         signal,
-        readyPattern: step.mode === "readiness" ? SERVER_READY_PATTERN : undefined
+        readyPattern: step.mode === "readiness" ? SERVER_READY_PATTERN : undefined,
+        readyCheck: step.mode === "readiness" ? verifyLocalHttpReadiness : undefined
       });
       const ok = this.isStepOk(step, result);
       results.push({
@@ -134,12 +137,86 @@ export class Verifier {
     return steps;
   }
 
-  private isStepOk(step: VerificationStep, result: { exitCode: number | null; timedOut: boolean; stdout: string; stderr: string }): boolean {
+  private isStepOk(step: VerificationStep, result: { exitCode: number | null; ready?: boolean }): boolean {
     if (step.mode === "readiness") {
-      return result.exitCode === 0 && SERVER_READY_PATTERN.test(`${result.stdout}\n${result.stderr}`);
+      return result.exitCode === 0 && result.ready === true;
     }
     return result.exitCode === 0;
   }
+}
+
+async function verifyLocalHttpReadiness(output: string): Promise<boolean> {
+  const urls = extractLocalReadinessUrls(output);
+  if (urls.length === 0) return true;
+  for (const url of urls) {
+    if (await isHealthyHttpUrl(url)) return true;
+  }
+  return false;
+}
+
+function extractLocalReadinessUrls(output: string): URL[] {
+  const cleanOutput = stripAnsi(output);
+  const matches = cleanOutput.match(/https?:\/\/[^\s'"<>]+/gi) ?? [];
+  const urls: URL[] = [];
+  for (const match of matches) {
+    try {
+      const url = new URL(match.replace(/[),.;]+$/, ""));
+      if (!isLocalHost(url.hostname)) continue;
+      if (url.hostname === "0.0.0.0" || url.hostname === "::") url.hostname = "127.0.0.1";
+      urls.push(url);
+    } catch {
+      // Ignore non-URL fragments in command output.
+    }
+  }
+  return urls;
+}
+
+function isLocalHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === "localhost" || host === "0.0.0.0" || host === "::" || host === "::1" || host === "[::1]" || /^127(?:\.\d{1,3}){3}$/.test(host);
+}
+
+function isHealthyHttpUrl(url: URL): Promise<boolean> {
+  return new Promise((resolveHealth) => {
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolveHealth(ok);
+    };
+    const get = url.protocol === "https:" ? httpsGet : httpGet;
+    const request = get(url, { timeout: 1_000 }, (response) => {
+      response.resume();
+      response.on("end", () => {
+        const statusCode = response.statusCode ?? 0;
+        finish(statusCode >= 200 && statusCode < 400);
+      });
+    });
+    request.on("timeout", () => {
+      request.destroy();
+      finish(false);
+    });
+    request.on("error", () => finish(false));
+  });
+}
+
+function stripAnsi(value: string): string {
+  let clean = "";
+  for (let index = 0; index < value.length; index += 1) {
+    if (value.charCodeAt(index) !== 27 || value[index + 1] !== "[") {
+      clean += value[index] ?? "";
+      continue;
+    }
+    index += 2;
+    while (index < value.length && !isAnsiFinalByte(value.charCodeAt(index))) {
+      index += 1;
+    }
+  }
+  return clean;
+}
+
+function isAnsiFinalByte(code: number): boolean {
+  return code >= 0x40 && code <= 0x7e;
 }
 
 async function detectNodeManager(projectDir: string, packageDir: string, pkg: PackageJson): Promise<string> {

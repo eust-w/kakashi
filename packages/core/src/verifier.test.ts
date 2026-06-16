@@ -1,4 +1,6 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import { once } from "node:events";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -106,6 +108,85 @@ describe("Verifier", () => {
         mode: "readiness"
       }
     ]);
+  });
+
+  it("fails readiness when a server logs ready but does not serve healthy HTTP", async () => {
+    const dir = join(tmpdir(), `kakashi-verifier-${randomUUID()}`);
+    const port = await getOpenPort();
+    await mkdir(join(dir, "local-express"), { recursive: true });
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({
+        scripts: {
+          start: "node server.mjs"
+        },
+        dependencies: {
+          express: "file:./local-express"
+        }
+      }),
+      "utf8"
+    );
+    await writeFile(join(dir, "local-express", "package.json"), JSON.stringify({ name: "express", version: "0.0.0" }), "utf8");
+    await writeFile(
+      join(dir, "server.mjs"),
+      [
+        "import { createServer } from 'node:http';",
+        `const port = ${port};`,
+        "createServer((_req, res) => {",
+        "  res.writeHead(503, { 'content-type': 'text/plain' });",
+        "  res.end('not ready');",
+        "}).listen(port, '127.0.0.1', () => {",
+        "  console.log(`listening on http://127.0.0.1:${port}`);",
+        "});"
+      ].join("\n"),
+      "utf8"
+    );
+
+    const result = await new Verifier().verify(dir, 2_000);
+
+    expect(result.ok).toBe(false);
+    expect(result.summary).toBe("Verification failed at npm start readiness.");
+  });
+
+  it("confirms server readiness by probing the logged local HTTP URL", async () => {
+    const dir = join(tmpdir(), `kakashi-verifier-${randomUUID()}`);
+    const port = await getOpenPort();
+    await mkdir(join(dir, "local-express"), { recursive: true });
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({
+        scripts: {
+          start: "node server.mjs"
+        },
+        dependencies: {
+          express: "file:./local-express"
+        }
+      }),
+      "utf8"
+    );
+    await writeFile(join(dir, "local-express", "package.json"), JSON.stringify({ name: "express", version: "0.0.0" }), "utf8");
+    await writeFile(
+      join(dir, "server.mjs"),
+      [
+        "import { writeFileSync } from 'node:fs';",
+        "import { createServer } from 'node:http';",
+        `const port = ${port};`,
+        "createServer((req, res) => {",
+        "  writeFileSync('readiness-probe.txt', req.url ?? '/');",
+        "  res.writeHead(204);",
+        "  res.end();",
+        "}).listen(port, '127.0.0.1', () => {",
+        "  console.log(`listening on http://127.0.0.1:${port}`);",
+        "});"
+      ].join("\n"),
+      "utf8"
+    );
+
+    const result = await new Verifier().verify(dir, 5_000);
+
+    expect(result.ok).toBe(true);
+    expect(result.steps.find((step) => step.name === "npm start readiness")?.result.ready).toBe(true);
+    await expect(readFile(join(dir, "readiness-probe.txt"), "utf8")).resolves.toBe("/");
   });
 
   it("detects Node server scripts without treating watch/build scripts as runnable", async () => {
@@ -324,3 +405,14 @@ describe("Verifier", () => {
     expect(result.steps.at(-1)?.result.exitCode).toBe(3);
   });
 });
+
+async function getOpenPort(): Promise<number> {
+  const server = createServer();
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  server.close();
+  await once(server, "close");
+  if (!address || typeof address === "string") throw new Error("Could not allocate a local port.");
+  return address.port;
+}

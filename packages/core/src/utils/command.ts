@@ -13,6 +13,7 @@ export interface RunCommandOptions {
   onStdout?: (chunk: string) => void;
   onStderr?: (chunk: string) => void;
   readyPattern?: RegExp;
+  readyCheck?: (output: string) => boolean | Promise<boolean>;
   signal?: AbortSignal;
 }
 
@@ -36,11 +37,21 @@ export async function runCommand(
       stdio: ["pipe", "pipe", "pipe"],
       detached: process.platform !== "win32"
     });
+    let readinessPoll: NodeJS.Timeout | null = null;
+    let readinessCheckRunning = false;
+    let readinessPatternSeen = false;
+
+    const clearReadinessPoll = () => {
+      if (!readinessPoll) return;
+      clearInterval(readinessPoll);
+      readinessPoll = null;
+    };
 
     const terminate = (reason: "abort" | "ready" | "timeout") => {
       if (reason === "timeout") timedOut = true;
       if (reason === "abort") aborted = true;
       if (reason === "ready") readyMatched = true;
+      clearReadinessPoll();
       if (timeout) {
         clearTimeout(timeout);
         timeout = null;
@@ -51,6 +62,35 @@ export async function runCommand(
           killProcessTree(child, "SIGKILL");
         }
       }, 2_000).unref();
+    };
+
+    const output = () => `${stdout}\n${stderr}`;
+
+    const pollReadiness = async () => {
+      if (!options.readyCheck || readyMatched || readinessCheckRunning) return;
+      readinessCheckRunning = true;
+      try {
+        if (await options.readyCheck(output())) {
+          terminate("ready");
+        }
+      } catch {
+        // Keep polling until readiness is confirmed or the command times out.
+      } finally {
+        readinessCheckRunning = false;
+      }
+    };
+
+    const startReadinessPolling = () => {
+      if (!options.readyCheck) {
+        terminate("ready");
+        return;
+      }
+      if (readinessPoll) return;
+      void pollReadiness();
+      readinessPoll = setInterval(() => {
+        void pollReadiness();
+      }, 250);
+      readinessPoll.unref();
     };
 
     let timeout: NodeJS.Timeout | null = options.timeoutMs
@@ -68,16 +108,19 @@ export async function runCommand(
 
     const checkReady = () => {
       if (!options.readyPattern || readyMatched) return;
-      if (!options.readyPattern.test(`${stdout}\n${stderr}`)) return;
-      terminate("ready");
+      if (!readinessPatternSeen && !options.readyPattern.test(output())) return;
+      readinessPatternSeen = true;
+      startReadinessPolling();
     };
 
     child.on("error", (error) => {
+      clearReadinessPoll();
       options.signal?.removeEventListener("abort", abortListener);
       reject(error);
     });
     child.stdin.on("error", (error: NodeJS.ErrnoException) => {
       if (error.code === "EPIPE" || error.code === "ERR_STREAM_DESTROYED") return;
+      clearReadinessPoll();
       options.signal?.removeEventListener("abort", abortListener);
       reject(error);
     });
@@ -94,6 +137,7 @@ export async function runCommand(
       checkReady();
     });
     child.on("close", (exitCode, signal) => {
+      clearReadinessPoll();
       if (timeout) clearTimeout(timeout);
       options.signal?.removeEventListener("abort", abortListener);
       resolve({
@@ -105,7 +149,8 @@ export async function runCommand(
         stderr: truncate(stderr),
         durationMs: Date.now() - started,
         timedOut: readyMatched || aborted ? false : timedOut,
-        aborted
+        aborted,
+        ready: readyMatched
       });
     });
 

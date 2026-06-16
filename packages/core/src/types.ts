@@ -157,6 +157,7 @@ export interface CommandResult {
   durationMs: number;
   timedOut: boolean;
   aborted: boolean;
+  ready?: boolean;
 }
 
 export interface VerificationStep {
