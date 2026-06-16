@@ -69,6 +69,7 @@ export class RunStore {
     };
     await ensureDir(join(this.rootDir, runId));
     await appendFile(this.eventsPath(runId), `${JSON.stringify(event)}\n`, "utf8");
+    await this.syncStageFromEvent(runId, stage);
     return event;
   }
 
@@ -88,5 +89,14 @@ export class RunStore {
   private eventsPath(runId: string): string {
     return join(this.rootDir, runId, "events.jsonl");
   }
+
+  private async syncStageFromEvent(runId: string, stage: RunStage): Promise<void> {
+    const state = await this.load(runId);
+    if (!state || state.stage === stage || isTerminalStage(state.stage)) return;
+    await this.save({ ...state, stage });
+  }
 }
 
+function isTerminalStage(stage: RunStage): boolean {
+  return stage === "completed" || stage === "failed" || stage === "cancelled";
+}

@@ -47,4 +47,19 @@ describe("RunStore", () => {
     expect(JSON.stringify(events)).toContain("[REDACTED]");
     expect(JSON.stringify(events)).not.toContain("ghp_123456789012345678901234567890");
   });
+
+  it("keeps stored run stages aligned with lifecycle events without mutating terminal states", async () => {
+    const root = await mkdtemp(join(tmpdir(), "kakashi-runs-"));
+    const store = new RunStore(root);
+    const state = await store.create("auto", "live stage tracking", join(root, "out"));
+
+    await store.appendEvent(state.runId, "searching", "info", "Searching");
+    await expect(store.load(state.runId)).resolves.toMatchObject({ stage: "searching" });
+
+    const completed = { ...(await store.load(state.runId))!, stage: "completed" as const };
+    await store.save(completed);
+    await store.appendEvent(state.runId, "failed", "error", "Late failure event");
+
+    await expect(store.load(state.runId)).resolves.toMatchObject({ stage: "completed" });
+  });
 });
