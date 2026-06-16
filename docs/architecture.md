@@ -18,6 +18,10 @@ Kakashi is an orchestration layer above Codex CLI. It does not generate canned p
 10. `GapDetector` extracts missing dependency/capability signals from real logs and can trigger another GitHub search iteration.
 11. `Exporter` writes reports, provenance, and source license copies.
 
+## Local Prerequisite Checks
+
+`kakashi doctor` validates required commands with executable permission checks, not just same-name file existence on `PATH`. This prevents ordinary files named `git`, `gh`, `codex`, `node`, or `pnpm` from being reported as usable tools.
+
 ## State
 
 Run state is stored under `.kakashi/runs/<runId>`:

@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { findExecutable, runCommand, shellJoin } from "./command";
 
@@ -89,6 +92,18 @@ describe("runCommand", () => {
     await expect(runCommand("kakashi-definitely-missing-command", [], { cwd: process.cwd() })).rejects.toThrow();
     await expect(findExecutable("kakashi-definitely-missing-command")).resolves.toBeNull();
     await expect(findExecutable("node")).resolves.toEqual(expect.stringContaining("/"));
+  });
+
+  it("does not report non-executable files as available commands", async () => {
+    const originalPath = process.env.PATH;
+    const binDir = await mkdtemp(join(tmpdir(), "kakashi-path-"));
+    await writeFile(join(binDir, "kakashi-not-executable"), "#!/bin/sh\necho no\n", { mode: 0o644 });
+    process.env.PATH = [binDir, ...(originalPath ? originalPath.split(delimiter) : [])].join(delimiter);
+    try {
+      await expect(findExecutable("kakashi-not-executable")).resolves.toBeNull();
+    } finally {
+      process.env.PATH = originalPath;
+    }
   });
 });
 

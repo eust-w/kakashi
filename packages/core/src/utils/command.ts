@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { constants } from "node:fs";
 import { access } from "node:fs/promises";
 import { delimiter } from "node:path";
 import type { CommandResult } from "../types";
@@ -138,7 +139,7 @@ export async function findExecutable(command: string): Promise<string | null> {
   for (const path of paths) {
     const candidate = `${path}/${command}`;
     try {
-      await access(candidate);
+      await access(candidate, constants.X_OK);
       return candidate;
     } catch {
       // Continue.
