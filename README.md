@@ -257,6 +257,8 @@ kakashi events <runId> --json
 
 打开 `http://127.0.0.1:4317/`。
 
+`serve --port` 必须是 `1` 到 `65535` 之间的整数，非法端口会在启动 server 前失败。
+
 源码开发时先启动 API server：
 
 ```bash

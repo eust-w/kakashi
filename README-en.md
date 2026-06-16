@@ -257,6 +257,8 @@ The single-file executable embeds the Web UI:
 
 Open `http://127.0.0.1:4317/`.
 
+`serve --port` must be an integer from `1` to `65535`; invalid ports fail before the server starts.
+
 From source, start the API server:
 
 ```bash

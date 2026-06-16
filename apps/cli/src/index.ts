@@ -102,12 +102,13 @@ program
   .option("--port <number>", "Port to listen on.", "4317")
   .option("--web-dir <dir>", "Directory containing a built Kakashi Web UI.")
   .option("--no-web", "Disable serving the Web UI.")
-  .action(async (options: { port: string; webDir?: string; web?: boolean }) => {
+  .action(async (options: ServeOptions) => {
+    const port = parsePort(options.port);
     const { startServer } = await import("@kakashi/server");
     const webDir =
       options.web === false ? undefined : options.webDir ? resolve(process.cwd(), options.webDir) : process.env.KAKASHI_WEB_DIST;
     const webAssets = options.web === false || webDir ? undefined : getEmbeddedWebAssets();
-    await startServer({ port: Number(options.port), workDir: process.cwd(), webDir, webAssets });
+    await startServer({ port, workDir: process.cwd(), webDir, webAssets });
   });
 
 program
@@ -184,6 +185,12 @@ interface JsonOptions {
 
 interface RunListOptions extends JsonOptions {
   limit: string;
+}
+
+interface ServeOptions {
+  port: string;
+  webDir?: string;
+  web?: boolean;
 }
 
 function createOrchestrator(options: CliOptions): KakashiOrchestrator {
@@ -275,6 +282,14 @@ function parsePositiveInteger(value: string, name: string): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) {
     throw new Error(`${name} must be a positive integer.`);
+  }
+  return parsed;
+}
+
+function parsePort(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65_535) {
+    throw new Error("port must be an integer between 1 and 65535.");
   }
   return parsed;
 }

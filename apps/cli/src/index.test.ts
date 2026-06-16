@@ -87,6 +87,26 @@ describe("kakashi CLI run inspection commands", () => {
     expect(result.stdout).toBe("");
     expect(JSON.parse(result.stderr)).toEqual({ error: "max-repos must be a positive integer." });
   });
+
+  it("rejects invalid server ports before starting the server", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "kakashi-cli-"));
+
+    const result = await runCli(["serve", "--port", "abc", "--no-web"], cwd);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("port must be an integer between 1 and 65535.");
+    expect(result.stdout).not.toContain("Kakashi server listening");
+  });
+
+  it("rejects out-of-range server ports", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "kakashi-cli-"));
+
+    const result = await runCli(["serve", "--port", "70000", "--no-web"], cwd);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("port must be an integer between 1 and 65535.");
+    expect(result.stdout).not.toContain("Kakashi server listening");
+  });
 });
 
 interface CliResult {
