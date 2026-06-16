@@ -190,6 +190,36 @@ describe("Verifier", () => {
     ]);
   });
 
+  it("combines verification commands for polyglot projects with multiple manifests", async () => {
+    const dir = join(tmpdir(), `kakashi-verifier-${randomUUID()}`);
+    await mkdir(join(dir, "tests"), { recursive: true });
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({
+        packageManager: "pnpm@10.33.0",
+        scripts: {
+          build: "tsc",
+          test: "vitest run"
+        }
+      }),
+      "utf8"
+    );
+    await writeFile(join(dir, "requirements.txt"), "pytest\n", "utf8");
+    await writeFile(join(dir, "go.mod"), "module example.com/kakashi\n", "utf8");
+
+    const steps = await new Verifier().detect(dir);
+
+    expect(steps.map((step) => step.name)).toEqual([
+      "pnpm install",
+      "pnpm build",
+      "pnpm test",
+      "pip install requirements",
+      "pytest",
+      "go test",
+      "go build"
+    ]);
+  });
+
   it("uses editable Python installs when only pyproject.toml is present", async () => {
     const dir = join(tmpdir(), `kakashi-verifier-${randomUUID()}`);
     await mkdir(dir, { recursive: true });

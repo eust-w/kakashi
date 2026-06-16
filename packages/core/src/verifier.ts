@@ -18,25 +18,26 @@ const READINESS_TIMEOUT_MS = 30_000;
 
 export class Verifier {
   async detect(projectDir: string): Promise<VerificationStep[]> {
+    const steps: VerificationStep[] = [];
     if (await pathExists(join(projectDir, "package.json"))) {
-      return await this.detectNode(projectDir);
+      steps.push(...await this.detectNode(projectDir));
     }
     if (await pathExists(join(projectDir, "pyproject.toml")) || await pathExists(join(projectDir, "requirements.txt"))) {
-      return await this.detectPython(projectDir);
+      steps.push(...await this.detectPython(projectDir));
     }
     if (await pathExists(join(projectDir, "go.mod"))) {
-      return [
+      steps.push(
         { name: "go test", command: ["go", "test", "./..."], required: true },
         { name: "go build", command: ["go", "build", "./..."], required: true }
-      ];
+      );
     }
     if (await pathExists(join(projectDir, "Cargo.toml"))) {
-      return [
+      steps.push(
         { name: "cargo test", command: ["cargo", "test"], required: true },
         { name: "cargo build", command: ["cargo", "build"], required: true }
-      ];
+      );
     }
-    return [];
+    return steps;
   }
 
   async verify(projectDir: string, timeoutMs: number, signal?: AbortSignal): Promise<VerificationResult> {
