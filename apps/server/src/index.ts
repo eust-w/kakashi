@@ -111,7 +111,13 @@ export function createApp(workDir = process.cwd(), web?: string | WebAssetSource
 
   app.get("/api/runs/:id/events", async (req, res, next) => {
     try {
-      const existing = await createRunStore(workDir).events(req.params.id);
+      const store = createRunStore(workDir);
+      const state = await store.load(req.params.id);
+      if (!state) {
+        res.status(404).json({ error: "Run not found" });
+        return;
+      }
+      const existing = await store.events(req.params.id);
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",

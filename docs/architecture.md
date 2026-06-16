@@ -40,6 +40,7 @@ CLI inspection commands read this store directly:
 - Auto runs stay active only while background orchestration is running.
 - Interactive runs stay active only after preparation succeeds and the plan is waiting for confirmation.
 - If interactive preparation fails, Kakashi persists the failed state and removes the in-memory active run entry; later confirmation requests return `404` instead of acting on a stale orchestrator.
+- Event streams validate that the run exists before opening the SSE connection; missing run IDs return `404` immediately instead of creating an empty live stream.
 
 Generated projects contain:
 

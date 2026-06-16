@@ -35,6 +35,23 @@ describe("resolveOutputDirInsideWorkDir", () => {
 });
 
 describe("server run lifecycle", () => {
+  it("returns 404 instead of opening an empty event stream for a missing run", async () => {
+    const workDir = await mkdtemp(join(tmpdir(), "kakashi-server-work-"));
+
+    await withRunningServer(workDir, async (baseUrl) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1_000);
+      const response = await fetch(`${baseUrl}/api/runs/missing-run/events`, { signal: controller.signal }).finally(() => {
+        clearTimeout(timeout);
+      });
+      if (response.status !== 404) await response.body?.cancel();
+
+      expect(response.status).toBe(404);
+      const body = (await response.json()) as { error?: string };
+      expect(body.error).toBe("Run not found");
+    });
+  });
+
   it("does not mutate terminal run state when a stale cancel request arrives", async () => {
     const workDir = await mkdtemp(join(tmpdir(), "kakashi-server-work-"));
     const runId = `run-${Date.now()}`;
