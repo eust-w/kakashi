@@ -1,28 +1,36 @@
+<div align="center">
+  <img src="docs/assets/kakashi-readme-hero.svg" alt="Kakashi 把 GitHub 搜索、能力图谱、Codex 执行和真实验证串成一条工作流" width="100%" />
+</div>
+
 # Kakashi
 
 语言 / Language: 简体中文 | [English](README-en.md)
 
 [![CI](https://github.com/eust-w/kakashi/actions/workflows/ci.yml/badge.svg)](https://github.com/eust-w/kakashi/actions/workflows/ci.yml)
+[![Pages](https://github.com/eust-w/kakashi/actions/workflows/pages.yml/badge.svg)](https://github.com/eust-w/kakashi/actions/workflows/pages.yml)
 [![Release](https://img.shields.io/github/v/release/eust-w/kakashi?sort=semver)](https://github.com/eust-w/kakashi/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-24%2B-339933)](https://nodejs.org/)
 
-Kakashi（复制忍者）是在 Codex CLI / Codex Desktop 之上构建的 GitHub 多仓库能力搜索、融合、改造和验证系统。
+Kakashi（复制忍者）是在 Codex CLI / Codex Desktop 之上构建的 GitHub 多仓库能力搜索、融合、改造和验证系统。它适合把“我想做一个什么软件”快速推进成有来源追踪、有验证证据、可继续开发的真实项目。
 
 你用一句话描述想做的软件，Kakashi 会搜索真实 GitHub 仓库，分析它们的能力和许可证，选择主项目与辅助项目，生成融合计划，调用 Codex CLI 修改代码，跑真实验证，并输出一个可运行项目和完整流程报告。
 
-[亮点](#亮点) · [快速开始](#快速开始) · [配置](#配置) · [CLI](#cli) · [Web-UI](#web-ui) · [Release](https://github.com/eust-w/kakashi/releases) · [贡献](#贡献)
+**在线页面**：启用 GitHub Pages 后访问 [https://eust-w.github.io/kakashi/](https://eust-w.github.io/kakashi/)<br>
+**本地控制台**：运行 `kakashi serve` 可打开带 API 的完整 Web UI。
+
+[亮点](#亮点) · [工作流](#工作流) · [快速开始](#快速开始) · [配置](#配置) · [CLI](#cli) · [Web-UI](#web-ui) · [Release](https://github.com/eust-w/kakashi/releases) · [贡献](#贡献)
 
 ## 亮点
 
-- 真实 GitHub 搜索：通过 Octokit 搜索公开或有权限的仓库，网络抖动时会 fallback 到 `gh api`。
-- 可解释仓库选择：候选仓库会记录评分拆解和选择原因，最终报告会说明为什么选它。
-- 候选仓库容错：单个候选仓库 clone 或分析失败时会记录 warn 事件并继续处理其它真实候选；只有全部候选失败才终止。
-- 真实 Codex 改造：调用本机 `codex exec`，不使用模拟成功路径。
-- 真实验证闭环：自动运行 install、lint、build、test、CLI help 或 server readiness；服务日志暴露本地 URL 时会发起真实 HTTP 探测，并回退检查常见健康端点。
-- 可中止执行：CLI/Web 后台命令支持取消信号，会终止 git、Codex 和 verifier 子进程。
-- 本地 Web UI：支持自动/交互模式、候选仓库选择、融合计划重算、修复轮数、copyleft 策略、覆盖输出和取消运行。
-- 来源与许可证追踪：生成 `SOURCE_PROVENANCE.json`、`KAKASHI_REPORT.md` 和来源仓库许可证副本。
+| 能力 | 它做什么 | 产物 |
+| --- | --- | --- |
+| 真实 GitHub 搜索 | 通过 Octokit 搜索公开或有权限的仓库，网络抖动时 fallback 到 `gh api` | 候选仓库、评分拆解、跳过原因 |
+| 能力图谱 | 从 README、manifest、模块和许可证中识别能力覆盖 | 主项目、辅助项目、融合计划 |
+| Codex 执行 | 调用本机 `codex exec` 修改代码，不走模拟成功路径 | 可运行项目、变更日志 |
+| 验证闭环 | 自动运行 install、lint、build、test、CLI help 或 server readiness | 验证结果、修复回环、失败证据 |
+| 来源追踪 | 记录来源仓库、许可证和能力匹配关系 | `SOURCE_PROVENANCE.json`、`KAKASHI_REPORT.md`、许可证副本 |
+| Web 控制台 | 支持自动/交互模式、候选选择、计划重算、取消运行 | 可视化运行状态和执行事件 |
 
 ## 为什么是 Kakashi
 
@@ -32,6 +40,8 @@ Kakashi（复制忍者）是在 Codex CLI / Codex Desktop 之上构建的 GitHub
 - 不 mock GitHub、Codex 或验证结果，默认走真实搜索、真实克隆、真实命令执行。
 - 不硬编码成功路径，验证失败会进入修复回环，并在报告中保留证据。
 - 不只输出代码，还输出来源追踪、许可证副本、验证日志和最终流程文档。
+
+## 工作流
 
 ```mermaid
 flowchart LR
@@ -46,6 +56,13 @@ flowchart LR
   H --> J["缺口检测"]
   J --> C
 ```
+
+一次完整运行通常会经历四个可审计阶段：
+
+1. **发现**：解析需求，搜索 GitHub，克隆并分析候选仓库。
+2. **规划**：构建能力图谱，选择主仓库和辅助仓库，生成融合任务。
+3. **执行**：调用 Codex CLI 在本地真实改造代码，保留执行事件。
+4. **验收**：运行项目检测、测试、构建和服务探测，导出报告与来源追踪。
 
 ## 核心能力
 

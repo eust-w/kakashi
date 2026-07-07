@@ -1,0 +1,47 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Kakashi product overview</title>
+  <desc id="desc">A product illustration showing GitHub repository search, Codex execution, verification, and export reports.</desc>
+  <rect width="1280" height="640" rx="32" fill="#0F172A"/>
+  <rect x="44" y="44" width="1192" height="552" rx="24" fill="#F8FAFC"/>
+  <rect x="80" y="86" width="320" height="468" rx="18" fill="#FFFFFF" stroke="#D8DEE9"/>
+  <rect x="432" y="86" width="768" height="468" rx="18" fill="#FFFFFF" stroke="#D8DEE9"/>
+  <rect x="108" y="116" width="56" height="56" rx="12" fill="#111827"/>
+  <text x="126" y="153" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="800">K</text>
+  <text x="180" y="137" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="800">Kakashi</text>
+  <text x="180" y="162" fill="#64748B" font-family="Inter, Arial, sans-serif" font-size="15">Codex capability fusion</text>
+  <rect x="108" y="210" width="248" height="96" rx="12" fill="#EFF6FF" stroke="#BFDBFE"/>
+  <text x="128" y="240" fill="#1E3A8A" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700">Requirement</text>
+  <text x="128" y="268" fill="#334155" font-family="Inter, Arial, sans-serif" font-size="15">Build a TypeScript dashboard</text>
+  <text x="128" y="290" fill="#64748B" font-family="Inter, Arial, sans-serif" font-size="14">with GitHub search and tests</text>
+  <rect x="108" y="334" width="116" height="52" rx="10" fill="#111827"/>
+  <text x="138" y="366" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">Auto</text>
+  <rect x="240" y="334" width="116" height="52" rx="10" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <text x="270" y="366" fill="#475569" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">Interactive</text>
+  <rect x="108" y="424" width="248" height="44" rx="10" fill="#2563EB"/>
+  <text x="178" y="452" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="800">Start run</text>
+  <text x="472" y="134" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="850">Search, fuse, verify, export</text>
+  <text x="472" y="166" fill="#64748B" font-family="Inter, Arial, sans-serif" font-size="16">A real execution loop for turning open-source capabilities into runnable projects.</text>
+  <g>
+    <rect x="476" y="220" width="146" height="84" rx="14" fill="#ECFDF5" stroke="#A7F3D0"/>
+    <text x="506" y="254" fill="#065F46" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="800">GitHub</text>
+    <text x="500" y="282" fill="#047857" font-family="Inter, Arial, sans-serif" font-size="14">real repos</text>
+    <rect x="672" y="220" width="146" height="84" rx="14" fill="#EEF2FF" stroke="#C7D2FE"/>
+    <text x="714" y="254" fill="#3730A3" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="800">Graph</text>
+    <text x="698" y="282" fill="#4F46E5" font-family="Inter, Arial, sans-serif" font-size="14">capabilities</text>
+    <rect x="868" y="220" width="146" height="84" rx="14" fill="#FFF7ED" stroke="#FED7AA"/>
+    <text x="910" y="254" fill="#9A3412" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="800">Codex</text>
+    <text x="896" y="282" fill="#C2410C" font-family="Inter, Arial, sans-serif" font-size="14">code changes</text>
+    <path d="M622 262H672" stroke="#94A3B8" stroke-width="3" stroke-linecap="round"/>
+    <path d="M818 262H868" stroke="#94A3B8" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <rect x="476" y="358" width="288" height="122" rx="14" fill="#F8FAFC" stroke="#D8DEE9"/>
+  <text x="502" y="392" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="800">Verification</text>
+  <circle cx="514" cy="424" r="8" fill="#22C55E"/>
+  <text x="532" y="430" fill="#475569" font-family="Inter, Arial, sans-serif" font-size="15">lint, typecheck, tests</text>
+  <circle cx="514" cy="454" r="8" fill="#22C55E"/>
+  <text x="532" y="460" fill="#475569" font-family="Inter, Arial, sans-serif" font-size="15">server readiness probes</text>
+  <rect x="812" y="358" width="288" height="122" rx="14" fill="#F8FAFC" stroke="#D8DEE9"/>
+  <text x="838" y="392" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="800">Artifacts</text>
+  <text x="838" y="426" fill="#475569" font-family="Inter, Arial, sans-serif" font-size="15">KAKASHI_REPORT.md</text>
+  <text x="838" y="456" fill="#475569" font-family="Inter, Arial, sans-serif" font-size="15">SOURCE_PROVENANCE.json</text>
+</svg>
